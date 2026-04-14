@@ -1,0 +1,11 @@
+pygame>=2.5
+mutagen>=1.47
+requests>=2.31
+yt-dlp>=2024.10.07
+numpy>=2.0
+soundfile>=0.13
+pydub>=0.25
+scipy>=1.10
+cffi>=1.16
+pycparser>=2.22
+
