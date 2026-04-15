@@ -1,0 +1,117 @@
+import os
+import sys
+import tempfile
+import types
+import unittest
+from unittest.mock import patch
+
+if "mutagen" not in sys.modules:
+    _mutagen = types.ModuleType("mutagen")
+    _mutagen.File = lambda *_args, **_kwargs: None
+    sys.modules["mutagen"] = _mutagen
+
+from library import Library
+
+
+class _TalbTag:
+    def __init__(self, value):
+        self.text = [value]
+
+
+class _Audio:
+    def __init__(self, tags):
+        self.tags = tags
+
+
+def _file_reader_from_album_map(album_by_file):
+    def _reader(path):
+        filename = os.path.basename(path)
+        value = album_by_file.get(filename)
+        if isinstance(value, Exception):
+            raise value
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return _Audio(value)
+        return _Audio({"album": [value]})
+
+    return _reader
+
+
+class LibraryTests(unittest.TestCase):
+    def test_refresh_groups_by_album_and_sorts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("b.mp3", "a.mp3", "z.ogg", "ignore.txt"):
+                with open(os.path.join(tmp, name), "wb"):
+                    pass
+
+            with patch("library.File", side_effect=_file_reader_from_album_map({
+                "a.mp3": "Alpha",
+                "z.ogg": "Alpha",
+                "b.mp3": "Beta",
+            })):
+                lib = Library(tmp)
+
+            self.assertEqual(
+                lib.render_items,
+                [
+                    {"type": "album", "text": "Alpha"},
+                    {"type": "song", "filename": "a.mp3", "text": "a.mp3"},
+                    {"type": "song", "filename": "z.ogg", "text": "z.ogg"},
+                    {"type": "album", "text": "Beta"},
+                    {"type": "song", "filename": "b.mp3", "text": "b.mp3"},
+                ],
+            )
+
+    def test_set_search_keeps_matching_album_and_song(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("a.mp3", "b.mp3"):
+                with open(os.path.join(tmp, name), "wb"):
+                    pass
+
+            with patch("library.File", side_effect=_file_reader_from_album_map({
+                "a.mp3": "Alpha",
+                "b.mp3": "Beta",
+            })):
+                lib = Library(tmp)
+
+            lib.set_search("b.mp3")
+
+            self.assertEqual(
+                lib.render_items,
+                [
+                    {"type": "album", "text": "Beta"},
+                    {"type": "song", "filename": "b.mp3", "text": "b.mp3"},
+                ],
+            )
+
+    def test_refresh_returns_false_when_snapshot_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "a.mp3"), "wb"):
+                pass
+
+            with patch("library.File", return_value=None):
+                lib = Library(tmp)
+
+            with patch.object(lib, "_album_name", wraps=lib._album_name) as wrapped_album_name:
+                self.assertFalse(lib.refresh())
+                wrapped_album_name.assert_not_called()
+
+            with patch.object(lib, "_album_name", wraps=lib._album_name) as wrapped_album_name:
+                self.assertTrue(lib.refresh(force=True))
+                wrapped_album_name.assert_called_once()
+
+    def test_album_name_prefers_talb_then_falls_back_to_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("library.File", return_value=None):
+                lib = Library(tmp)
+
+            with patch("library.File", return_value=_Audio({"TALB": _TalbTag("Album From TALB")})):
+                self.assertEqual(lib._album_name("any.mp3"), "Album From TALB")
+
+            with patch("library.File", side_effect=RuntimeError("read error")):
+                self.assertEqual(lib._album_name("any.mp3"), "Unknown Album")
+
+
+if __name__ == "__main__":
+    unittest.main()
