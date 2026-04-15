@@ -51,6 +51,33 @@ class Library:
             pass
         return "Unknown Album"
 
+    def _song_name(self, filepath: str, filename: str) -> str:
+        fallback = os.path.splitext(filename)[0] or filename
+        try:
+            audio = File(filepath)
+            if audio is None or audio.tags is None:
+                return fallback
+            tags = audio.tags
+            if "TIT2" in tags:
+                try:
+                    title = str(tags["TIT2"].text[0]).strip()
+                    if title:
+                        return title
+                except Exception:
+                    pass
+            for key in ("title", "©nam"):
+                if key in tags:
+                    try:
+                        value = tags[key]
+                        title = str(value[0] if isinstance(value, (list, tuple)) else value).strip()
+                        if title:
+                            return title
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        return fallback
+
     def refresh(self, force: bool = False) -> bool:
         """Přegeneruje seznam položek, pokud se soubory změnily."""
         files = self._scan_files()
@@ -59,17 +86,18 @@ class Library:
             return False
         self._snapshot = key_set
 
-        groups: dict[str, list[str]] = {}
+        groups: dict[str, list[tuple[str, str]]] = {}
         for name in files:
             path = os.path.join(self.root_dir, name)
             album = self._album_name(path)
-            groups.setdefault(album, []).append(name)
+            song_name = self._song_name(path, name)
+            groups.setdefault(album, []).append((song_name, name))
 
         items: List[Dict] = []
         for album in sorted(groups.keys()):
             items.append({"type": "album", "text": album})
-            for song in sorted(groups[album]):
-                items.append({"type": "song", "filename": song, "text": song})
+            for song_name, filename in sorted(groups[album], key=lambda x: x[0].lower()):
+                items.append({"type": "song", "filename": filename, "text": song_name})
 
         self._all_items = items
         self._apply_search()
@@ -109,5 +137,4 @@ class Library:
             out.insert(0, last_album)
 
         self.render_items = out
-
 

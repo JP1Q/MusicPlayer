@@ -285,6 +285,18 @@ def _build_download_error_feedback(last_line: str, fallback: str) -> tuple[str, 
     return fallback, "Check the link and your internet connection, then retry."
 
 
+def _download_progress_ratio(progress_text: str) -> float | None:
+    if not progress_text:
+        return None
+    t = progress_text.strip()
+    if not t.endswith("%"):
+        return None
+    try:
+        return max(0.0, min(1.0, float(t[:-1]) / 100.0))
+    except Exception:
+        return None
+
+
 def _iter_section_songs(items: list[dict], section: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     current_album = None
@@ -1437,6 +1449,35 @@ while running:
     screen.set_clip(SEARCH_RECT)
     screen.blit(s_surf, (s_x, SEARCH_RECT.y + 3))
     screen.set_clip(old_clip)
+
+    if download_in_progress:
+        dim_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dim_overlay.fill((110, 110, 110, 150))
+        screen.blit(dim_overlay, (0, 0))
+
+        panel_w = min(760, WIDTH - 80)
+        panel_h = 170
+        panel = pygame.Rect((WIDTH - panel_w) // 2, (HEIGHT - panel_h) // 2, panel_w, panel_h)
+        pygame.draw.rect(screen, (245, 245, 245), panel, border_radius=10)
+        pygame.draw.rect(screen, (185, 185, 185), panel, width=2, border_radius=10)
+
+        title = tutorial_font.render(f"Download {state_label}", True, state_color)
+        screen.blit(title, (panel.x + 20, panel.y + 18))
+
+        status_line = info_font.render(download_status_msg or "Working...", True, (50, 50, 50))
+        screen.blit(status_line, (panel.x + 20, panel.y + 58))
+
+        bar_rect = pygame.Rect(panel.x + 20, panel.y + 102, panel.width - 40, 24)
+        pygame.draw.rect(screen, (220, 220, 220), bar_rect, border_radius=6)
+        pygame.draw.rect(screen, (170, 170, 170), bar_rect, width=1, border_radius=6)
+        ratio = _download_progress_ratio(download_progress_text)
+        if ratio is not None and ratio > 0:
+            fill_rect = pygame.Rect(bar_rect.x, bar_rect.y, int(bar_rect.width * ratio), bar_rect.height)
+            pygame.draw.rect(screen, (65, 125, 190), fill_rect, border_radius=6)
+
+        progress_label = download_progress_text or "Please wait..."
+        progress_surf = info_font.render(progress_label, True, (40, 40, 40))
+        screen.blit(progress_surf, (bar_rect.right - progress_surf.get_width() - 10, bar_rect.y + 1))
 
     if show_tutorial:
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
