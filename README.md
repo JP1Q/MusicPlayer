@@ -160,6 +160,6 @@ python -m pip install --upgrade pip
 
 ## License
 
-No license file yet. If you plan to share/fork publicly, add a license (MIT/Apache-2.0/etc.).
+No license file yet.
 
 
