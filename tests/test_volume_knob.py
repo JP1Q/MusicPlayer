@@ -30,12 +30,13 @@ class VolumeKnobControllerTests(unittest.TestCase):
         knob.start_drag((120, 100))
         self.assertTrue(knob.drag((100, 120)))
         self.assertLess(knob.value, 0.5)
+        self.assertFalse(knob.drag((100, 120)))
 
     def test_sprite_rotation_degrees_maps_value_to_rotation(self):
         knob = VolumeKnobController(center=(0, 0), radius=20, value=0.0)
-        self.assertEqual(knob.sprite_rotation_degrees(), 135.0)
-        knob.value = 1.0
         self.assertEqual(knob.sprite_rotation_degrees(), -135.0)
+        knob.value = 1.0
+        self.assertEqual(knob.sprite_rotation_degrees(), 135.0)
 
 
 if __name__ == "__main__":

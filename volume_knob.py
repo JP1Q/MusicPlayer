@@ -49,8 +49,10 @@ class VolumeKnobController:
     def drag(self, mouse_pos: tuple[int, int]) -> bool:
         if not self.is_dragging:
             return False
-        self.value = self._value_from_position(mouse_pos)
-        return True
+        next_value = self._value_from_position(mouse_pos)
+        changed = abs(next_value - self.value) > 1e-6
+        self.value = next_value
+        return changed
 
     def sprite_rotation_degrees(self) -> float:
-        return self.max_angle - (self.value * (self.max_angle - self.min_angle))
+        return self.min_angle + (self.value * (self.max_angle - self.min_angle))
