@@ -2,10 +2,22 @@ import os
 import re
 from bisect import bisect_right
 from dataclasses import dataclass
+from pathlib import Path
+
+try:
+    import requests
+except Exception:
+    requests = None
+
+try:
+    from mutagen import File as MutagenFile
+except Exception:
+    MutagenFile = None
 
 
 _TIMESTAMP_RE = re.compile(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]")
 _META_TAG_RE = re.compile(r"^\[[a-zA-Z]{2,8}:[^\]]*\]\s*$")
+_LRCLIB_SEARCH_URL = "https://lrclib.net/api/search"
 
 
 @dataclass(frozen=True)
@@ -33,8 +45,9 @@ class TimedLyrics:
             return
         lrc_path = os.path.splitext(audio_path)[0] + ".lrc"
         if not os.path.exists(lrc_path):
-            self.clear("No synchronized lyrics (.lrc) found")
-            return
+            if not self._download_and_cache_lrc(audio_path, lrc_path):
+                self.clear("No synchronized lyrics (.lrc) found locally or online")
+                return
         try:
             lines = self.parse_lrc_text_file(lrc_path)
         except (OSError, UnicodeError):
@@ -81,3 +94,69 @@ class TimedLyrics:
             return -1
         idx = bisect_right(self._times, max(0.0, playback_seconds)) - 1
         return idx if idx >= 0 else -1
+
+    @staticmethod
+    def _guess_artist_title(audio_path: str) -> tuple[str | None, str | None]:
+        stem = Path(audio_path).stem.strip()
+        artist = None
+        title = stem or None
+        if " - " in stem:
+            left, right = stem.split(" - ", 1)
+            if left.strip() and right.strip():
+                artist = left.strip()
+                title = right.strip()
+
+        if MutagenFile is None:
+            return artist, title
+        try:
+            audio = MutagenFile(audio_path, easy=True)
+            tags = getattr(audio, "tags", None) or {}
+            tag_title = tags.get("title", [None])[0]
+            tag_artist = tags.get("artist", [None])[0]
+            if isinstance(tag_title, str) and tag_title.strip():
+                title = tag_title.strip()
+            if isinstance(tag_artist, str) and tag_artist.strip():
+                artist = tag_artist.strip()
+        except Exception:
+            pass
+        return artist, title
+
+    @staticmethod
+    def _pick_synced_lyrics(payload: object) -> str | None:
+        if not isinstance(payload, list):
+            return None
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            synced = item.get("syncedLyrics")
+            if isinstance(synced, str) and synced.strip():
+                return synced.strip()
+        return None
+
+    def _download_and_cache_lrc(self, audio_path: str, lrc_path: str) -> bool:
+        if requests is None:
+            return False
+        artist, title = self._guess_artist_title(audio_path)
+        stem = Path(audio_path).stem.strip()
+        candidates: list[dict[str, str]] = []
+        if title and artist:
+            candidates.append({"track_name": title, "artist_name": artist})
+        if title:
+            candidates.append({"track_name": title})
+        if stem and stem != title:
+            candidates.append({"track_name": stem})
+
+        for params in candidates:
+            try:
+                resp = requests.get(_LRCLIB_SEARCH_URL, params=params, timeout=4)
+                if resp.status_code != 200:
+                    continue
+                synced = self._pick_synced_lyrics(resp.json())
+                if not synced:
+                    continue
+                with open(lrc_path, "w", encoding="utf-8") as f:
+                    f.write(synced.rstrip() + "\n")
+                return True
+            except Exception:
+                continue
+        return False
