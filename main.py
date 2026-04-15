@@ -208,7 +208,9 @@ current_offset = 0.0
 
 dl_input_text = ""
 dl_input_active = False
-dl_mode = "music"  # music / videos x3
+top_submenu = "library"  # library / download
+download_step = "source"  # source -> options -> confirm
+download_source = "music"  # music / videos
 
 search_text = ""
 search_active = False
@@ -611,16 +613,44 @@ def download_youtube_video_audio(url):
 
     threading.Thread(target=yt_thread, daemon=True).start()
 
+
+def reset_download_flow(clear_url: bool = False) -> None:
+    global download_step, dl_input_active, dl_input_text
+    download_step = "source"
+    dl_input_active = False
+    if clear_url:
+        dl_input_text = ""
+
+
+def start_download_from_flow() -> None:
+    global top_submenu
+    u = dl_input_text.strip()
+    if not u or "http" not in u:
+        return
+
+    if download_source == "videos":
+        download_youtube_video_audio(u)
+    else:
+        download_youtube(u)
+
+    reset_download_flow(clear_url=True)
+    top_submenu = "library"
+
 HALF_W = WIDTH // 2
 ART_RECT = pygame.Rect((HALF_W - 480) // 2, 50, 480, 480)
 PLAY_BTN = pygame.Rect(HALF_W // 2 - 30 - 40, 560, 40, 45)
 PAUSE_BTN = pygame.Rect(HALF_W // 2 + 30, 560, 40, 45)
 PROGRESS_BAR_RECT = pygame.Rect(80, 640, 480, 8)
 SEARCH_RECT = pygame.Rect(HALF_W + 180, 18, 260, 26)
-# DL_INPUT_RECT defined above; tutorial target uses it
-# Single download input (mode switch: Music/Videos)
-DL_INPUT_RECT = pygame.Rect(HALF_W + 20, HEIGHT - 105, 380, 30)
-DL_MODE_BTN_RECT = pygame.Rect(DL_INPUT_RECT.right + 10, DL_INPUT_RECT.y, 90, DL_INPUT_RECT.height)
+TOP_SUBMENU_LIBRARY_RECT = pygame.Rect(HALF_W + 20, 16, 74, 28)
+TOP_SUBMENU_DOWNLOAD_RECT = pygame.Rect(TOP_SUBMENU_LIBRARY_RECT.right + 8, 16, 96, 28)
+DL_SOURCE_MUSIC_RECT = pygame.Rect(HALF_W + 36, 120, 210, 42)
+DL_SOURCE_VIDEOS_RECT = pygame.Rect(HALF_W + 264, 120, 210, 42)
+DL_INPUT_RECT = pygame.Rect(HALF_W + 36, 205, 438, 32)
+DL_BACK_BTN_RECT = pygame.Rect(HALF_W + 36, 258, 90, 34)
+DL_CANCEL_BTN_RECT = pygame.Rect(HALF_W + 136, 258, 95, 34)
+DL_NEXT_BTN_RECT = pygame.Rect(HALF_W + 241, 258, 95, 34)
+DL_CONFIRM_BTN_RECT = pygame.Rect(HALF_W + 346, 258, 128, 34)
 
 # Rects used for tutorial targeting (so the arrow points to actual UI elements)
 LIBRARY_LIST_RECT = pygame.Rect(HALF_W + 20, 60, HALF_W - 40, HEIGHT - 200)
@@ -650,8 +680,8 @@ tutorial_steps = [
         "side": "top",
     },
     {
-        "text": "5. Vpravo dole vlož odkaz na YouTube (i playlist) a stáhni hudbu.",
-        "target": "youtube",
+        "text": "5. Nahoře otevři Download a projdi kroky source -> options -> confirm.",
+        "target": "download_menu",
         "side": "top",
     },
     {
@@ -674,6 +704,8 @@ def _tutorial_target_rect(step: dict) -> pygame.Rect:
         return PROGRESS_BAR_RECT
     if t == "youtube":
         return DL_INPUT_RECT
+    if t == "download_menu":
+        return TOP_SUBMENU_DOWNLOAD_RECT
     if t == "search":
         return SEARCH_RECT
     # Fallback if someone adds a step without target
@@ -868,16 +900,21 @@ while running:
                         tutorial_index -= 1
                 elif event.key in (K_RETURN, K_ESCAPE):
                     show_tutorial = False
+            elif top_submenu == "download" and event.key == K_ESCAPE:
+                reset_download_flow()
+                top_submenu = "library"
+            elif top_submenu == "download" and download_step == "confirm":
+                if event.key == K_RETURN:
+                    start_download_from_flow()
+                elif event.key == K_BACKSPACE:
+                    download_step = "options"
+                    dl_input_active = True
             elif dl_input_active:
                 if event.key == K_RETURN:
                     u = dl_input_text.strip()
                     if u and "http" in u:
-                        if dl_mode == "videos":
-                            download_youtube_video_audio(u)
-                        else:
-                            download_youtube(u)
-                elif event.key == K_TAB:
-                    dl_mode = "videos" if dl_mode == "music" else "music"
+                        download_step = "confirm"
+                        dl_input_active = False
                 elif event.key == K_v and (event.mod & KMOD_CTRL):
                     try:
                         import pygame.scrap
@@ -896,7 +933,7 @@ while running:
                     ch = event.unicode
                     if ch and ch >= " " and ch != "\x7f":
                         dl_input_text += ch
-            elif search_active:
+            elif search_active and top_submenu == "library":
                 if event.key == K_RETURN:
                     pass
                 elif event.key == K_BACKSPACE:
@@ -1196,159 +1233,246 @@ while running:
         rel = (mouse_pos[0] - PROGRESS_BAR_RECT.x) / PROGRESS_BAR_RECT.width
         rel = max(0.0, min(1.0, rel))
         seek_to_seconds(rel * song_length)
-    # Library label + background panel
-    lib_lbl = title_font.render("Library:", True, (50, 50, 50))
-    screen.blit(lib_lbl, (HALF_W + 20, 20))
+    # Top submenu (Library / Download)
+    if mouse_click and TOP_SUBMENU_LIBRARY_RECT.collidepoint(mouse_pos):
+        top_submenu = "library"
+        dl_input_active = False
+    elif mouse_click and TOP_SUBMENU_DOWNLOAD_RECT.collidepoint(mouse_pos):
+        top_submenu = "download"
+        search_active = False
+
+    lib_btn_col = (255, 255, 255) if top_submenu == "library" else (228, 228, 228)
+    dl_btn_col = (255, 255, 255) if top_submenu == "download" else (228, 228, 228)
+    pygame.draw.rect(screen, lib_btn_col, TOP_SUBMENU_LIBRARY_RECT, border_radius=8)
+    pygame.draw.rect(screen, (170, 170, 170), TOP_SUBMENU_LIBRARY_RECT, 1, border_radius=8)
+    pygame.draw.rect(screen, dl_btn_col, TOP_SUBMENU_DOWNLOAD_RECT, border_radius=8)
+    pygame.draw.rect(screen, (170, 170, 170), TOP_SUBMENU_DOWNLOAD_RECT, 1, border_radius=8)
+    screen.blit(info_font.render("Library", True, (40, 40, 40)), (TOP_SUBMENU_LIBRARY_RECT.x + 7, TOP_SUBMENU_LIBRARY_RECT.y + 3))
+    screen.blit(info_font.render("Download", True, (40, 40, 40)), (TOP_SUBMENU_DOWNLOAD_RECT.x + 7, TOP_SUBMENU_DOWNLOAD_RECT.y + 3))
+
+    # Library/download panel
     lib_area = pygame.Rect(HALF_W + 10, 45, HALF_W - 20, HEIGHT - 250)
     lib_overlay = pygame.Surface((lib_area.width, lib_area.height), pygame.SRCALPHA)
     lib_overlay.fill((255, 255, 255, 35))
     screen.blit(lib_overlay, lib_area.topleft)
 
-    old_clip = screen.get_clip()
-    screen.set_clip(pygame.Rect(HALF_W + 20, 60, HALF_W - 40, HEIGHT - 260))
+    if top_submenu == "library":
+        old_clip = screen.get_clip()
+        screen.set_clip(pygame.Rect(HALF_W + 20, 60, HALF_W - 40, HEIGHT - 260))
 
-    y_offset = 60 - scroll_y
+        y_offset = 60 - scroll_y
 
-    def draw_section(items, section_name: str, enabled: bool, x0: int, y: int) -> int:
-        global current_song, is_playing
-        if not enabled:
+        def draw_section(items, section_name: str, enabled: bool, x0: int, y: int) -> int:
+            global current_song, is_playing
+            if not enabled:
+                return y
+
+            collapsed_set = collapsed_albums_videos if section_name == "videos" else collapsed_albums_music
+            current_album: str | None = None
+            album_collapsed = False
+
+            for item in items:
+                if item["type"] == "album":
+                    current_album = str(item.get("text") or "").strip()
+                    if not current_album or current_album.lower() in {"unknown", "unknown album"}:
+                        current_album = None
+                        album_collapsed = False
+                        continue
+                    album_collapsed = current_album in collapsed_set
+
+                    # album header row with toggle
+                    tri = ">" if album_collapsed else "v"
+                    header_rect = pygame.Rect(x0, y, HALF_W - 60, 30)
+
+                    # click toggle
+                    if mouse_click and header_rect.collidepoint(mouse_pos):
+                        if album_collapsed:
+                            collapsed_set.discard(current_album)
+                            album_collapsed = False
+                        else:
+                            collapsed_set.add(current_album)
+                            album_collapsed = True
+
+                    lbl = title_font.render(f"{tri} {current_album}", True, (50, 50, 50))
+                    screen.blit(lbl, (x0, y))
+                    y += 35
+                elif item["type"] == "song":
+                    # skip songs if current album is collapsed
+                    if current_album is not None and album_collapsed:
+                        continue
+                    song = item["filename"]
+                    song_rect = pygame.Rect(x0 + 20, y, HALF_W - 60, 30)
+                    color = (0, 0, 0)
+
+                    if song == current_song:
+                        color = (100, 150, 255)
+                    elif song_rect.collidepoint(mouse_pos):
+                        color = (100, 100, 100)
+                        if mouse_click:
+                            # Switch library root based on section
+                            if section_name == "videos":
+                                # play from videos folder
+                                fp = os.path.join(VIDEOS_DIR, song)
+                                if os.path.exists(fp):
+                                    try:
+                                        pygame.mixer.music.load(fp)
+                                        pygame.mixer.music.play()
+                                        current_song = song
+                                        is_playing = True
+                                        _bump_play_count("videos", song)
+                                    except Exception:
+                                        pass
+                            else:
+                                play_song(song)
+
+                    st = song_stats.get(_stat_key(section_name, song)) or {}
+                    plays = int(st.get("plays", 0))
+                    rating = int(st.get("rating", 0))
+                    stat_txt = ""
+                    if rating:
+                        stat_txt += f"  {'*' * rating}"
+                    if plays:
+                        stat_txt += f"  {plays} plays"
+                    s_lbl = info_font.render(f"{item['text']}{stat_txt}", True, color)
+                    screen.blit(s_lbl, (song_rect.x, song_rect.y))
+                    y += 35
+
             return y
 
-        collapsed_set = collapsed_albums_videos if section_name == "videos" else collapsed_albums_music
-        current_album: str | None = None
-        album_collapsed = False
+        # Always show both sections with separators
+        header_h = 26
+        screen.blit(info_font.render("Music", True, (60, 60, 60)), (HALF_W + 24, y_offset))
+        y_offset += header_h
+        y_offset = draw_section(music_library.render_items, "music", True, HALF_W + 20, y_offset)
+        y_offset += 18
+        screen.blit(info_font.render("Videos", True, (60, 60, 60)), (HALF_W + 24, y_offset))
+        y_offset += header_h
+        y_offset = draw_section(videos_library.render_items, "videos", True, HALF_W + 20, y_offset)
 
-        for item in items:
-            if item["type"] == "album":
-                current_album = str(item.get("text") or "").strip()
-                if not current_album or current_album.lower() in {"unknown", "unknown album"}:
-                    current_album = None
-                    album_collapsed = False
-                    continue
-                album_collapsed = current_album in collapsed_set
+        screen.set_clip(old_clip)
 
-                # album header row with toggle
-                tri = ">" if album_collapsed else "v"
-                header_rect = pygame.Rect(x0, y, HALF_W - 60, 30)
+        if mouse_click:
+            search_active = SEARCH_RECT.collidepoint(mouse_pos)
+        dl_input_active = False
 
-                # click toggle
-                if mouse_click and header_rect.collidepoint(mouse_pos):
-                    if album_collapsed:
-                        collapsed_set.discard(current_album)
-                        album_collapsed = False
-                    else:
-                        collapsed_set.add(current_album)
-                        album_collapsed = True
+        search_caption = info_font.render("hledat:", True, (50, 50, 50))
+        screen.blit(search_caption, (HALF_W + 120, 20))
 
-                lbl = title_font.render(f"{tri} {current_album}", True, (50, 50, 50))
-                screen.blit(lbl, (x0, y))
-                y += 35
-            elif item["type"] == "song":
-                # skip songs if current album is collapsed
-                if current_album is not None and album_collapsed:
-                    continue
-                song = item["filename"]
-                song_rect = pygame.Rect(x0 + 20, y, HALF_W - 60, 30)
-                color = (0, 0, 0)
+        s_color = (255, 255, 255) if search_active else (230, 230, 230)
+        pygame.draw.rect(screen, s_color, SEARCH_RECT)
+        pygame.draw.rect(screen, (180, 180, 180), SEARCH_RECT, 1)
 
-                if song == current_song:
-                    color = (100, 150, 255)
-                elif song_rect.collidepoint(mouse_pos):
-                    color = (100, 100, 100)
-                    if mouse_click:
-                        # Switch library root based on section
-                        if section_name == "videos":
-                            # play from videos folder
-                            fp = os.path.join(VIDEOS_DIR, song)
-                            if os.path.exists(fp):
-                                try:
-                                    pygame.mixer.music.load(fp)
-                                    pygame.mixer.music.play()
-                                    current_song = song
-                                    is_playing = True
-                                    _bump_play_count("videos", song)
-                                except Exception:
-                                    pass
-                        else:
-                            play_song(song)
+        s_surf = info_font.render(search_text or "alb nebo song", True, (120, 120, 120) if not search_text else (0, 0, 0))
+        s_x = SEARCH_RECT.x + 5
+        if s_surf.get_width() > SEARCH_RECT.width - 10:
+            s_x -= (s_surf.get_width() - (SEARCH_RECT.width - 10))
+        old_clip = screen.get_clip()
+        screen.set_clip(SEARCH_RECT)
+        screen.blit(s_surf, (s_x, SEARCH_RECT.y + 3))
+        screen.set_clip(old_clip)
+    else:
+        search_active = False
 
-                st = song_stats.get(_stat_key(section_name, song)) or {}
-                plays = int(st.get("plays", 0))
-                rating = int(st.get("rating", 0))
-                stat_txt = ""
-                if rating:
-                    stat_txt += f"  {'*' * rating}"
-                if plays:
-                    stat_txt += f"  {plays} plays"
-                s_lbl = info_font.render(f"{item['text']}{stat_txt}", True, color)
-                screen.blit(s_lbl, (song_rect.x, song_rect.y))
-                y += 35
+        flow_title = title_font.render("Download flow", True, (50, 50, 50))
+        screen.blit(flow_title, (HALF_W + 24, 66))
 
-        return y
+        step_hint = info_font.render(f"Step: {download_step}  (source -> options -> confirm)", True, (75, 75, 75))
+        screen.blit(step_hint, (HALF_W + 24, 96))
 
-    # Always show both sections with separators
-    header_h = 26
-    screen.blit(info_font.render("Music", True, (60, 60, 60)), (HALF_W + 24, y_offset))
-    y_offset += header_h
-    y_offset = draw_section(music_library.render_items, "music", True, HALF_W + 20, y_offset)
-    y_offset += 18
-    screen.blit(info_font.render("Videos", True, (60, 60, 60)), (HALF_W + 24, y_offset))
-    y_offset += header_h
-    y_offset = draw_section(videos_library.render_items, "videos", True, HALF_W + 20, y_offset)
+        if download_in_progress and download_status_msg:
+            d = info_font.render(download_status_msg, True, (80, 80, 80))
+            screen.blit(d, (HALF_W + 24, 326))
 
-    screen.set_clip(old_clip)
+        if download_step == "source":
+            src_lbl = info_font.render("Choose source folder:", True, (45, 45, 45))
+            screen.blit(src_lbl, (HALF_W + 24, 170))
 
-    dl_lbl = info_font.render("paste link to download:", True, (50, 50, 50))
-    screen.blit(dl_lbl, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 25))
+            src_music_color = (255, 255, 255) if download_source == "music" else (236, 236, 236)
+            src_video_color = (255, 255, 255) if download_source == "videos" else (236, 236, 236)
+            pygame.draw.rect(screen, src_music_color, DL_SOURCE_MUSIC_RECT, border_radius=8)
+            pygame.draw.rect(screen, (170, 170, 170), DL_SOURCE_MUSIC_RECT, 1, border_radius=8)
+            pygame.draw.rect(screen, src_video_color, DL_SOURCE_VIDEOS_RECT, border_radius=8)
+            pygame.draw.rect(screen, (170, 170, 170), DL_SOURCE_VIDEOS_RECT, 1, border_radius=8)
+            screen.blit(info_font.render("Music", True, (30, 30, 30)), (DL_SOURCE_MUSIC_RECT.x + 74, DL_SOURCE_MUSIC_RECT.y + 8))
+            screen.blit(info_font.render("Videos", True, (30, 30, 30)), (DL_SOURCE_VIDEOS_RECT.x + 72, DL_SOURCE_VIDEOS_RECT.y + 8))
 
-    # show download status
-    if download_in_progress and download_status_msg:
-        d = info_font.render(download_status_msg, True, (80, 80, 80))
-        screen.blit(d, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 48))
+            if mouse_click:
+                if DL_SOURCE_MUSIC_RECT.collidepoint(mouse_pos):
+                    download_source = "music"
+                    download_step = "options"
+                    dl_input_active = True
+                elif DL_SOURCE_VIDEOS_RECT.collidepoint(mouse_pos):
+                    download_source = "videos"
+                    download_step = "options"
+                    dl_input_active = True
+        elif download_step == "options":
+            dl_lbl = info_font.render(f"Source: {download_source}. Paste YouTube URL:", True, (50, 50, 50))
+            screen.blit(dl_lbl, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 25))
 
-    if mouse_click:
-        dl_input_active = DL_INPUT_RECT.collidepoint(mouse_pos)
-        search_active = SEARCH_RECT.collidepoint(mouse_pos)
+            if mouse_click:
+                if DL_BACK_BTN_RECT.collidepoint(mouse_pos):
+                    download_step = "source"
+                    dl_input_active = False
+                elif DL_CANCEL_BTN_RECT.collidepoint(mouse_pos):
+                    reset_download_flow()
+                    top_submenu = "library"
+                elif DL_NEXT_BTN_RECT.collidepoint(mouse_pos) and dl_input_text.strip() and "http" in dl_input_text.strip():
+                    download_step = "confirm"
+                    dl_input_active = False
+                else:
+                    dl_input_active = DL_INPUT_RECT.collidepoint(mouse_pos)
 
-        if DL_MODE_BTN_RECT.collidepoint(mouse_pos):
-            dl_mode = "videos" if dl_mode == "music" else "music"
-            dl_input_active = True
+            input_color = (200, 200, 200) if not dl_input_active else (255, 255, 255)
+            pygame.draw.rect(screen, input_color, DL_INPUT_RECT)
+            pygame.draw.rect(screen, (180, 180, 180), DL_INPUT_RECT, 1)
 
-    input_color = (200, 200, 200) if not dl_input_active else (255, 255, 255)
-    pygame.draw.rect(screen, input_color, DL_INPUT_RECT)
-    pygame.draw.rect(screen, (180, 180, 180), DL_INPUT_RECT, 1)
+            rendered_input = info_font.render(dl_input_text, True, (0, 0, 0))
+            txt_x = DL_INPUT_RECT.x + 5
+            if rendered_input.get_width() > DL_INPUT_RECT.width - 10:
+                txt_x -= (rendered_input.get_width() - (DL_INPUT_RECT.width - 10))
+            old_clip = screen.get_clip()
+            screen.set_clip(DL_INPUT_RECT)
+            screen.blit(rendered_input, (txt_x, DL_INPUT_RECT.y + 3))
+            screen.set_clip(old_clip)
 
-    mode_caption = "Music" if dl_mode == "music" else "Videos"
-    pygame.draw.rect(screen, (225, 225, 225), DL_MODE_BTN_RECT)
-    pygame.draw.rect(screen, (180, 180, 180), DL_MODE_BTN_RECT, 1)
-    m = info_font.render(mode_caption, True, (30, 30, 30))
-    screen.blit(m, (DL_MODE_BTN_RECT.centerx - m.get_width() // 2, DL_MODE_BTN_RECT.y + 4))
+            pygame.draw.rect(screen, (235, 235, 235), DL_BACK_BTN_RECT, border_radius=8)
+            pygame.draw.rect(screen, (180, 180, 180), DL_BACK_BTN_RECT, 1, border_radius=8)
+            pygame.draw.rect(screen, (235, 235, 235), DL_CANCEL_BTN_RECT, border_radius=8)
+            pygame.draw.rect(screen, (180, 180, 180), DL_CANCEL_BTN_RECT, 1, border_radius=8)
+            next_col = (235, 235, 235) if dl_input_text.strip() and "http" in dl_input_text.strip() else (205, 205, 205)
+            pygame.draw.rect(screen, next_col, DL_NEXT_BTN_RECT, border_radius=8)
+            pygame.draw.rect(screen, (180, 180, 180), DL_NEXT_BTN_RECT, 1, border_radius=8)
+            screen.blit(info_font.render("Back", True, (30, 30, 30)), (DL_BACK_BTN_RECT.x + 23, DL_BACK_BTN_RECT.y + 6))
+            screen.blit(info_font.render("Cancel", True, (30, 30, 30)), (DL_CANCEL_BTN_RECT.x + 16, DL_CANCEL_BTN_RECT.y + 6))
+            screen.blit(info_font.render("Next", True, (30, 30, 30)), (DL_NEXT_BTN_RECT.x + 23, DL_NEXT_BTN_RECT.y + 6))
+        else:
+            preview_url = dl_input_text.strip() or "-"
+            src = info_font.render(f"Source: {download_source}", True, (45, 45, 45))
+            url = info_font.render(f"URL: {preview_url[:55]}", True, (45, 45, 45))
+            confirm_hint = info_font.render("Confirm download?", True, (45, 45, 45))
+            screen.blit(src, (HALF_W + 24, 165))
+            screen.blit(url, (HALF_W + 24, 196))
+            screen.blit(confirm_hint, (HALF_W + 24, 227))
 
-    rendered_input = info_font.render(dl_input_text, True, (0, 0, 0))
-    txt_x = DL_INPUT_RECT.x + 5
-    if rendered_input.get_width() > DL_INPUT_RECT.width - 10:
-        txt_x -= (rendered_input.get_width() - (DL_INPUT_RECT.width - 10))
+            if mouse_click:
+                if DL_BACK_BTN_RECT.collidepoint(mouse_pos):
+                    download_step = "options"
+                    dl_input_active = True
+                elif DL_CANCEL_BTN_RECT.collidepoint(mouse_pos):
+                    reset_download_flow()
+                    top_submenu = "library"
+                elif DL_CONFIRM_BTN_RECT.collidepoint(mouse_pos):
+                    start_download_from_flow()
 
-    old_clip = screen.get_clip()
-    screen.set_clip(DL_INPUT_RECT)
-    screen.blit(rendered_input, (txt_x, DL_INPUT_RECT.y + 2))
-    screen.set_clip(old_clip)
-
-    search_caption = info_font.render("hledat:", True, (50, 50, 50))
-    screen.blit(search_caption, (HALF_W + 120, 20))
-
-    s_color = (255, 255, 255) if search_active else (230, 230, 230)
-    pygame.draw.rect(screen, s_color, SEARCH_RECT)
-    pygame.draw.rect(screen, (180, 180, 180), SEARCH_RECT, 1)
-
-    s_surf = info_font.render(search_text or "alb nebo song", True, (120, 120, 120) if not search_text else (0, 0, 0))
-    s_x = SEARCH_RECT.x + 5
-    if s_surf.get_width() > SEARCH_RECT.width - 10:
-        s_x -= (s_surf.get_width() - (SEARCH_RECT.width - 10))
-    old_clip = screen.get_clip()
-    screen.set_clip(SEARCH_RECT)
-    screen.blit(s_surf, (s_x, SEARCH_RECT.y + 3))
-    screen.set_clip(old_clip)
+            pygame.draw.rect(screen, (235, 235, 235), DL_BACK_BTN_RECT, border_radius=8)
+            pygame.draw.rect(screen, (180, 180, 180), DL_BACK_BTN_RECT, 1, border_radius=8)
+            pygame.draw.rect(screen, (235, 235, 235), DL_CANCEL_BTN_RECT, border_radius=8)
+            pygame.draw.rect(screen, (180, 180, 180), DL_CANCEL_BTN_RECT, 1, border_radius=8)
+            pygame.draw.rect(screen, (235, 235, 235), DL_CONFIRM_BTN_RECT, border_radius=8)
+            pygame.draw.rect(screen, (180, 180, 180), DL_CONFIRM_BTN_RECT, 1, border_radius=8)
+            screen.blit(info_font.render("Back", True, (30, 30, 30)), (DL_BACK_BTN_RECT.x + 23, DL_BACK_BTN_RECT.y + 6))
+            screen.blit(info_font.render("Cancel", True, (30, 30, 30)), (DL_CANCEL_BTN_RECT.x + 16, DL_CANCEL_BTN_RECT.y + 6))
+            screen.blit(info_font.render("Download", True, (30, 30, 30)), (DL_CONFIRM_BTN_RECT.x + 17, DL_CONFIRM_BTN_RECT.y + 6))
 
     if show_tutorial:
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
