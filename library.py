@@ -53,7 +53,7 @@ class Library:
                     return str(tags["TALB"].text[0])
                 except Exception:
                     pass
-            for key in ("album", "©alb", "playlist", "TXXX:PLAYLIST"):
+            for key in ("album", "©alb", "playlist"):
                 if key in tags:
                     try:
                         text = _tag_text(tags[key])
