@@ -59,10 +59,10 @@ class LibraryTests(unittest.TestCase):
                 lib.render_items,
                 [
                     {"type": "album", "text": "Alpha"},
-                    {"type": "song", "filename": "a.mp3", "text": "a.mp3"},
-                    {"type": "song", "filename": "z.ogg", "text": "z.ogg"},
+                    {"type": "song", "filename": "a.mp3", "text": "a"},
+                    {"type": "song", "filename": "z.ogg", "text": "z"},
                     {"type": "album", "text": "Beta"},
-                    {"type": "song", "filename": "b.mp3", "text": "b.mp3"},
+                    {"type": "song", "filename": "b.mp3", "text": "b"},
                 ],
             )
 
@@ -78,13 +78,13 @@ class LibraryTests(unittest.TestCase):
             })):
                 lib = Library(tmp)
 
-            lib.set_search("b.mp3")
+            lib.set_search("b")
 
             self.assertEqual(
                 lib.render_items,
                 [
                     {"type": "album", "text": "Beta"},
-                    {"type": "song", "filename": "b.mp3", "text": "b.mp3"},
+                    {"type": "song", "filename": "b.mp3", "text": "b"},
                 ],
             )
 
