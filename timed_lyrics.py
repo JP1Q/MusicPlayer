@@ -18,6 +18,7 @@ except ImportError:
 _TIMESTAMP_RE = re.compile(r"\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]")
 _META_TAG_RE = re.compile(r"^\[[a-zA-Z]{2,8}:[^\]]*\]\s*$")
 _LRCLIB_SEARCH_URL = "https://lrclib.net/api/search"
+_LRCLIB_REQUEST_TIMEOUT_SECONDS = 3
 
 
 @dataclass(frozen=True)
@@ -149,7 +150,7 @@ class TimedLyrics:
 
         for params in candidates:
             try:
-                resp = requests.get(_LRCLIB_SEARCH_URL, params=params, timeout=3)
+                resp = requests.get(_LRCLIB_SEARCH_URL, params=params, timeout=_LRCLIB_REQUEST_TIMEOUT_SECONDS)
                 if resp.status_code != 200:
                     continue
                 synced = self._pick_synced_lyrics(resp.json())
