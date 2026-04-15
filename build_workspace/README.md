@@ -4,14 +4,22 @@ Tahle složka je schválně bokem, aby se build soubory nemíchaly do rootu proj
 
 ## Windows (EXE)
 
-Použij skript `windows_build.ps1` (přidá se později) nebo:
+Standard release flow:
 
 ```powershell
-py -3.11 -m pip install pyinstaller
-py -3.11 -m PyInstaller --clean --noconfirm ..\UkasCoUmis.spec
+powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1 -BuildInstaller
 ```
 
-Výstup bude v `..\dist\` (PyInstaller default).
+Výstup je v `build_workspace\out\`:
+- `dist\UkasCoUmis\...`
+- `release\UkasCoUmis-windows-portable.zip`
+- `release\UkasCoUmis-Setup.exe`
+
+Wrapper script stále funguje:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_workspace\windows\build_windows.ps1 -BuildInstaller
+```
 
 ## Android (APK)
 
@@ -23,4 +31,3 @@ buildozer android debug
 ```
 
 `buildozer.spec` je v rootu.
-

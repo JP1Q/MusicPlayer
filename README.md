@@ -67,17 +67,30 @@ python main.py
 
 ### Windows EXE
 
-There’s a build workspace folder so we don’t spam the repo root with build junk:
+Use one release flow from the project root:
 
 ```powershell
-cd D:\PythonShit\UkasCoUmis
 .\.venv\Scripts\Activate.ps1
-\# outputs go to build_workspace\out\...
-powershell -ExecutionPolicy Bypass -File .\build_workspace\windows\build_windows.ps1
+# outputs go to build_workspace\out\...
+powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1 -BuildInstaller
 ```
 
 Output:
-- `build_workspace\out\dist\...`
+- `build_workspace\out\dist\UkasCoUmis\...` (PyInstaller app folder)
+- `build_workspace\out\release\UkasCoUmis-windows-portable.zip`
+- `build_workspace\out\release\UkasCoUmis-Setup.exe` (installer)
+
+The legacy path still works and forwards to the same flow:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_workspace\windows\build_windows.ps1 -BuildInstaller
+```
+
+### Installer verification (release checklist)
+
+1. Run `UkasCoUmis-Setup.exe` from `build_workspace\out\release`.
+2. Launch **UkasCoUmis** from Start Menu or desktop shortcut and verify it starts.
+3. In Windows settings, uninstall **UkasCoUmis** and confirm install folder/shortcuts are removed.
 
 ### Notes (yt-dlp / ffmpeg)
 
@@ -159,5 +172,4 @@ python -m pip install --upgrade pip
 ## License
 
 No license file yet.
-
 
