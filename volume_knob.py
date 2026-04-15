@@ -53,4 +53,4 @@ class VolumeKnobController:
         return True
 
     def sprite_rotation_degrees(self) -> float:
-        return self.min_angle + (self.value * (self.max_angle - self.min_angle))
+        return self.max_angle - (self.value * (self.max_angle - self.min_angle))

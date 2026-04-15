@@ -33,9 +33,9 @@ class VolumeKnobControllerTests(unittest.TestCase):
 
     def test_sprite_rotation_degrees_maps_value_to_rotation(self):
         knob = VolumeKnobController(center=(0, 0), radius=20, value=0.0)
-        self.assertEqual(knob.sprite_rotation_degrees(), -135.0)
-        knob.value = 1.0
         self.assertEqual(knob.sprite_rotation_degrees(), 135.0)
+        knob.value = 1.0
+        self.assertEqual(knob.sprite_rotation_degrees(), -135.0)
 
 
 if __name__ == "__main__":
