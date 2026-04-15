@@ -231,6 +231,8 @@ search_text = ""
 search_active = False
 group_mode = "album"
 order_mode = "alphabet"
+GROUP_LABELS = {"album": "By album", "artist": "By artist"}
+ORDER_LABELS = {"alphabet": "A->Z", "age": "By age", "random": "Random"}
 
 
 show_tutorial = True
@@ -1385,8 +1387,8 @@ while running:
     pygame.draw.rect(screen, (170, 170, 170), ORDER_TOGGLE_RECT, 1, border_radius=8)
     screen.blit(info_font.render("Library", True, (40, 40, 40)), (TOP_SUBMENU_LIBRARY_RECT.x + 7, TOP_SUBMENU_LIBRARY_RECT.y + 3))
     screen.blit(info_font.render("Download", True, (40, 40, 40)), (TOP_SUBMENU_DOWNLOAD_RECT.x + 7, TOP_SUBMENU_DOWNLOAD_RECT.y + 3))
-    group_label = "By album" if group_mode == "album" else "By artist"
-    order_label = "A->Z" if order_mode == "alphabet" else ("By age" if order_mode == "age" else "Random")
+    group_label = GROUP_LABELS.get(group_mode, "By album")
+    order_label = ORDER_LABELS.get(order_mode, "A->Z")
     screen.blit(info_font.render(group_label, True, (40, 40, 40)), (GROUP_TOGGLE_RECT.x + 6, GROUP_TOGGLE_RECT.y + 3))
     screen.blit(info_font.render(order_label, True, (40, 40, 40)), (ORDER_TOGGLE_RECT.x + 6, ORDER_TOGGLE_RECT.y + 3))
 

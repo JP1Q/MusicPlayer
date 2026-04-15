@@ -11,6 +11,7 @@ class Library:
     SUPPORTED_EXT = (".mp3", ".ogg", ".flac", ".m4a", ".wav")
     GROUP_MODES = ("album", "artist")
     ORDER_MODES = ("alphabet", "age", "random")
+    MAX_YEAR_SENTINEL = 10_000
 
     def __init__(self, root_dir: str):
         self.root_dir = root_dir
@@ -157,6 +158,10 @@ class Library:
         return None
 
     def _rebuild_items(self) -> None:
+        def _entry_sort_key(entry: Dict) -> tuple:
+            prefix = (entry["album"].lower(),) if self._group_mode == "artist" else ()
+            return prefix + (entry["track"] is None, entry["track"] or 0, entry["index"])
+
         groups: dict[str, List[Dict]] = {}
         for entry in self._entries:
             label = entry["artist"] if self._group_mode == "artist" else entry["album"]
@@ -171,8 +176,8 @@ class Library:
                 if years:
                     return (0, min(years), name.lower())
                 # First tuple value keeps groups without year metadata after known-year groups.
-                # 10_000 is safely above valid 4-digit years used in this app.
-                return (1, 10_000, name.lower())
+                # MAX_YEAR_SENTINEL is safely above valid 4-digit years used in this app.
+                return (1, self.MAX_YEAR_SENTINEL, name.lower())
 
             group_names.sort(key=_group_age)
         elif self._order_mode == "random":
@@ -181,10 +186,7 @@ class Library:
         items: List[Dict] = []
         for group_name in group_names:
             entries = list(groups[group_name])
-            if self._group_mode == "album":
-                entries.sort(key=lambda e: (e["track"] is None, e["track"] or 0, e["index"]))
-            else:
-                entries.sort(key=lambda e: (e["album"].lower(), e["track"] is None, e["track"] or 0, e["index"]))
+            entries.sort(key=_entry_sort_key)
             items.append({"type": "album", "text": group_name})
             for entry in entries:
                 items.append({
