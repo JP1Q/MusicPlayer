@@ -69,8 +69,8 @@ class TimedLyrics:
             for m in matches:
                 minutes = int(m.group(1))
                 seconds = int(m.group(2))
-                millis_raw = m.group(3) or "0"
-                millis = int(millis_raw.ljust(3, "0")[:3])
+                milliseconds_str = m.group(3) or "0"
+                millis = int(milliseconds_str.ljust(3, "0")[:3])
                 total = minutes * 60 + seconds + (millis / 1000.0)
                 out.append(LyricLine(time_seconds=total, text=lyric_text))
         out.sort(key=lambda x: x.time_seconds)
