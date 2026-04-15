@@ -641,7 +641,7 @@ ART_RECT = pygame.Rect((HALF_W - 480) // 2, 50, 480, 480)
 PLAY_BTN = pygame.Rect(HALF_W // 2 - 30 - 40, 560, 40, 45)
 PAUSE_BTN = pygame.Rect(HALF_W // 2 + 30, 560, 40, 45)
 PROGRESS_BAR_RECT = pygame.Rect(80, 640, 480, 8)
-SEARCH_RECT = pygame.Rect(HALF_W + 180, 18, 260, 26)
+SEARCH_RECT = pygame.Rect(HALF_W + 280, 18, HALF_W - 300, 26)
 TOP_SUBMENU_LIBRARY_RECT = pygame.Rect(HALF_W + 20, 16, 74, 28)
 TOP_SUBMENU_DOWNLOAD_RECT = pygame.Rect(TOP_SUBMENU_LIBRARY_RECT.right + 8, 16, 96, 28)
 DL_SOURCE_MUSIC_RECT = pygame.Rect(HALF_W + 36, 120, 210, 42)
@@ -1356,7 +1356,8 @@ while running:
         dl_input_active = False
 
         search_caption = info_font.render("hledat:", True, (50, 50, 50))
-        screen.blit(search_caption, (HALF_W + 120, 20))
+        search_caption_x = SEARCH_RECT.x - search_caption.get_width() - 8
+        screen.blit(search_caption, (search_caption_x, 20))
 
         s_color = (255, 255, 255) if search_active else (230, 230, 230)
         pygame.draw.rect(screen, s_color, SEARCH_RECT)
