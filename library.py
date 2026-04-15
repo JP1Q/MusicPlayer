@@ -110,6 +110,7 @@ class Library:
 
     @staticmethod
     def _tag_int(value) -> int | None:
+        """Extract integer from common tag formats like `['2/12']`, text tags, or plain values."""
         try:
             if hasattr(value, "text"):
                 value = value.text[0]
@@ -169,6 +170,8 @@ class Library:
                 years = [e["year"] for e in groups[name] if e.get("year") is not None]
                 if years:
                     return (0, min(years), name.lower())
+                # First tuple value keeps groups without year metadata after known-year groups.
+                # 10_000 is safely above valid 4-digit years used in this app.
                 return (1, 10_000, name.lower())
 
             group_names.sort(key=_group_age)

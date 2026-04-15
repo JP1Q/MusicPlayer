@@ -16,11 +16,6 @@ import library as library_module
 Library = library_module.Library
 
 
-class _MockAlbumTag:
-    def __init__(self, value):
-        self.text = [value]
-
-
 class _MockTextTag:
     def __init__(self, value):
         self.text = [value]
@@ -114,7 +109,7 @@ class LibraryTests(unittest.TestCase):
             with patch.object(library_module, "File", return_value=None):
                 lib = Library(tmp)
 
-            with patch.object(library_module, "File", return_value=_Audio({"TALB": _MockAlbumTag("Album From TALB")})):
+            with patch.object(library_module, "File", return_value=_Audio({"TALB": _MockTextTag("Album From TALB")})):
                 self.assertEqual(lib._album_name("any.mp3"), "Album From TALB")
 
             with patch.object(library_module, "File", return_value=_Audio({"album": ["Album Fallback"]})):
