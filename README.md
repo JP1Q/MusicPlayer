@@ -92,6 +92,27 @@ If users report that downloads fail, include `ffmpeg.exe` and `ffprobe.exe` next
 
 Use Linux/WSL for Android builds.
 
+#### Windows wizard (recommended on Windows host)
+
+From PowerShell in repo root:
+
+```powershell
+.\tools\build_android_wizard.bat
+```
+
+Or directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build_android_wizard.ps1
+```
+
+The wizard:
+- checks WSL availability
+- picks Ubuntu (or first available distro)
+- installs required Linux deps
+- creates/uses `.venv`
+- runs the debug APK build
+
 #### Toolchain (known-good versions)
 
 - OS: Ubuntu 22.04+ / WSL2 Ubuntu
