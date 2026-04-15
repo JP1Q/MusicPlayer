@@ -162,6 +162,16 @@ is_loading_metadata = False
 status_msg = ""
 download_status_msg = ""
 download_in_progress = False
+# Download UX state vocabulary used by renderer + input locking.
+DOWNLOAD_STATES = ("idle", "queued", "downloading", "success", "error")
+# States that must lock download input/mode controls.
+DOWNLOAD_ACTIVE_STATES = {"queued", "downloading"}
+# Maximum rendered length of raw yt-dlp reason text.
+MAX_DOWNLOAD_ERROR_LINE_LEN = 80
+DOWNLOAD_STATES_WITH_PROGRESS = {"queued", "downloading", "success"}
+download_state = "idle"
+download_progress_text = ""
+download_error_next_step = ""
 visuals = [0 for _ in range(40)]
 # chaos fáze pro vizuál (ať je to ujetý) x3
 visual_phase = [random.uniform(0, math.tau) for _ in range(40)]
@@ -231,6 +241,68 @@ next_library_refresh = 0
 scroll_y = 0
 
 was_busy = False
+
+
+def _set_download_state(state: str, status: str, progress: str = "", next_step: str = "") -> None:
+    """Update download UI state fields.
+
+    `download_in_progress` is derived from membership in `DOWNLOAD_ACTIVE_STATES`
+    so input/mode controls stay locked only for active download states.
+    """
+    global download_state, download_status_msg, download_progress_text, download_error_next_step, download_in_progress
+    if state not in DOWNLOAD_STATES:
+        state = "error"
+    download_state = state
+    download_status_msg = status
+    download_progress_text = progress
+    download_error_next_step = next_step
+    download_in_progress = state in DOWNLOAD_ACTIVE_STATES
+
+
+def _build_download_error_feedback(last_line: str, fallback: str) -> tuple[str, str]:
+    """Build download error feedback.
+
+    Args:
+        last_line: Last known yt-dlp output line (best-effort reason source).
+        fallback: Generic fallback reason when no specific detail is available.
+
+    Returns:
+        Tuple[str, str]: (error_message, next_step_guidance).
+    """
+    line = (last_line or "").strip()
+    low = line.lower()
+
+    if "ffmpeg" in low or "ffprobe" in low:
+        return "Download failed: ffmpeg not found.", "Install ffmpeg (and ffprobe), then retry."
+    if "unsupported url" in low or "url could be" in low:
+        return "Download failed: unsupported or invalid link.", "Paste a full YouTube URL and try again."
+    if "private video" in low or "is private" in low:
+        return "Download failed: video is private.", "Use a public video URL or one you can access."
+    if "sign in to confirm your age" in low or "age-restricted" in low:
+        return "Download failed: age-restricted content.", "Try a different video or use yt-dlp with account cookies."
+    if "http error 403" in low or "forbidden" in low:
+        return "Download failed: access denied (403).", "Retry later or try a different source."
+    if line:
+        max_len = MAX_DOWNLOAD_ERROR_LINE_LEN
+        if len(line) <= max_len:
+            trimmed = line
+        else:
+            trimmed = f"{line[:max_len - 3]}..."
+        return f"Download failed: {trimmed}", "Check the link and your internet connection, then retry."
+    return fallback, "Check the link and your internet connection, then retry."
+
+
+def _download_progress_ratio(progress_text: str) -> float | None:
+    """Convert text like '42%' to a normalized 0..1 float; return None if invalid."""
+    if not progress_text:
+        return None
+    t = progress_text.strip()
+    if not t.endswith("%"):
+        return None
+    try:
+        return max(0.0, min(1.0, float(t[:-1]) / 100.0))
+    except Exception:
+        return None
 
 
 def _iter_section_songs(items: list[dict], section: str) -> list[tuple[str, str]]:
@@ -479,14 +551,15 @@ def get_playback_seconds() -> float:
     return max(0.0, pos_s)
 
 def download_youtube(url):
-    global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+    global yt_input_text, next_library_refresh
     old_text = yt_input_text
-    yt_input_text = "Downloading: 0%"
+    yt_input_text = "Queued..."
+    _set_download_state("queued", "Preparing download...", "0%")
     def yt_thread():
-        global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+        global yt_input_text, next_library_refresh
+        last_line = ""
         try:
-            download_in_progress = True
-            download_status_msg = "Downloading..."
+            _set_download_state("downloading", "Downloading music...", "0%")
             # čteme stdout od yt-dlp, ať UI vidí procenta; šablona zvládne i playlisty x3
             # NOTE: bestaudio + --restrict-filenames makes names predictable on Windows.
             # Add uploader + id to avoid collisions / wrong overwrites when titles repeat.
@@ -519,8 +592,6 @@ def download_youtube(url):
             )
 
             percent = None
-            last_line = ""
-
             if proc.stdout:
                 for line in proc.stdout:
                     last_line = line.strip()
@@ -535,10 +606,10 @@ def download_youtube(url):
 
                     if percent:
                         yt_input_text = f"Downloading: {percent}"
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading music...", percent)
                     else:
                         yt_input_text = "Downloading..."
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading music...")
 
                     # během stahování občas refresh knihovny (playlisty se sypou postupně) x3
                     if "[ExtractAudio]" in last_line or "Destination" in last_line or "Downloading item" in last_line:
@@ -547,12 +618,12 @@ def download_youtube(url):
             rc = proc.wait()
             if rc != 0:
                 yt_input_text = old_text
-                download_status_msg = "Download failed"
-                download_in_progress = False
+                err_msg, next_step = _build_download_error_feedback(last_line, f"Download failed (exit code {rc}).")
+                _set_download_state("error", err_msg, next_step=next_step)
                 return
 
             yt_input_text = ""
-            download_status_msg = "Download completed"
+            _set_download_state("success", "Download completed.", "100%")
 
             # po konci chvilku čekáme (ffmpeg/thumbnail), pak refresh x3
             try:
@@ -562,25 +633,25 @@ def download_youtube(url):
                 pass
 
             next_library_refresh = 0
-            download_in_progress = False
-        except Exception:
+        except Exception as e:
             yt_input_text = old_text
-            download_status_msg = "Download error"
-            download_in_progress = False
+            err_msg, next_step = _build_download_error_feedback(str(e), "Download error.")
+            _set_download_state("error", err_msg, next_step=next_step)
     threading.Thread(target=yt_thread, daemon=True).start()
 
 
 def download_youtube_video_audio(url):
     """Download audio from videos into VIDEOS_DIR."""
-    global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+    global yt_input_text, next_library_refresh
     old_text = yt_input_text
-    yt_input_text = "Downloading (video): 0%"
+    yt_input_text = "Queued..."
+    _set_download_state("queued", "Preparing video download...", "0%")
 
     def yt_thread():
-        global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+        global yt_input_text, next_library_refresh
+        last_line = ""
         try:
-            download_in_progress = True
-            download_status_msg = "Downloading (video)..."
+            _set_download_state("downloading", "Downloading video audio...", "0%")
             cmd = [
                 "yt-dlp",
                 "-f", "bestaudio/best",
@@ -621,10 +692,10 @@ def download_youtube_video_audio(url):
                                 break
                     if percent:
                         yt_input_text = f"Downloading (video): {percent}"
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading video audio...", percent)
                     else:
                         yt_input_text = "Downloading (video)..."
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading video audio...")
 
                     if "[ExtractAudio]" in last_line or "Destination" in last_line or "Downloading item" in last_line:
                         next_library_refresh = 0
@@ -632,19 +703,18 @@ def download_youtube_video_audio(url):
             rc = proc.wait()
             if rc != 0:
                 yt_input_text = old_text
-                download_status_msg = "Download failed"
-                download_in_progress = False
+                err_msg, next_step = _build_download_error_feedback(last_line, f"Download failed (exit code {rc}).")
+                _set_download_state("error", err_msg, next_step=next_step)
                 return
 
             yt_input_text = ""
-            download_status_msg = "Download completed"
+            _set_download_state("success", "Download completed.", "100%")
             time.sleep(0.6)
             next_library_refresh = 0
-            download_in_progress = False
-        except Exception:
+        except Exception as e:
             yt_input_text = old_text
-            download_status_msg = "Download error"
-            download_in_progress = False
+            err_msg, next_step = _build_download_error_feedback(str(e), "Download error.")
+            _set_download_state("error", err_msg, next_step=next_step)
 
     threading.Thread(target=yt_thread, daemon=True).start()
 
@@ -946,7 +1016,7 @@ while running:
                 elif event.key == K_BACKSPACE:
                     download_step = "options"
                     dl_input_active = True
-            elif dl_input_active:
+            elif dl_input_active and top_submenu == "download" and download_step == "options":
                 if event.key == K_RETURN:
                     u = dl_input_text.strip()
                     if u and "http" in u:
@@ -1283,6 +1353,23 @@ while running:
     screen.blit(info_font.render("Library", True, (40, 40, 40)), (TOP_SUBMENU_LIBRARY_RECT.x + 7, TOP_SUBMENU_LIBRARY_RECT.y + 3))
     screen.blit(info_font.render("Download", True, (40, 40, 40)), (TOP_SUBMENU_DOWNLOAD_RECT.x + 7, TOP_SUBMENU_DOWNLOAD_RECT.y + 3))
 
+    state_labels = {
+        "idle": "Idle",
+        "queued": "Queued",
+        "downloading": "Downloading",
+        "success": "Success",
+        "error": "Error",
+    }
+    state_colors = {
+        "idle": (90, 90, 90),
+        "queued": (120, 100, 40),
+        "downloading": (45, 95, 155),
+        "success": (28, 120, 70),
+        "error": (170, 45, 45),
+    }
+    state_label = state_labels.get(download_state, "Idle")
+    state_color = state_colors.get(download_state, (90, 90, 90))
+
     # Library/download panel
     lib_area = pygame.Rect(HALF_W + 10, 45, HALF_W - 20, HEIGHT - 250)
     lib_overlay = pygame.Surface((lib_area.width, lib_area.height), pygame.SRCALPHA)
@@ -1462,9 +1549,15 @@ while running:
         step_hint = info_font.render(f"Step: {download_step}  (source -> options -> confirm)", True, (75, 75, 75))
         screen.blit(step_hint, (HALF_W + 24, 96))
 
-        if download_in_progress and download_status_msg:
-            d = info_font.render(download_status_msg, True, (80, 80, 80))
-            screen.blit(d, (HALF_W + 24, 326))
+        state_text = f"State: {state_label}"
+        if download_progress_text and download_state in DOWNLOAD_STATES_WITH_PROGRESS:
+            state_text += f" ({download_progress_text})"
+        d_state = info_font.render(state_text, True, state_color)
+        screen.blit(d_state, (HALF_W + 24, 122))
+
+        status_text = download_status_msg or "Ready to download."
+        d_status = info_font.render(status_text, True, (70, 70, 70))
+        screen.blit(d_status, (HALF_W + 24, 144))
 
         if download_step == "source":
             src_lbl = info_font.render("Choose source folder:", True, (45, 45, 45))
@@ -1556,6 +1649,36 @@ while running:
             screen.blit(info_font.render("Back", True, (30, 30, 30)), (DL_BACK_BTN_RECT.x + 23, DL_BACK_BTN_RECT.y + 6))
             screen.blit(info_font.render("Cancel", True, (30, 30, 30)), (DL_CANCEL_BTN_RECT.x + 16, DL_CANCEL_BTN_RECT.y + 6))
             screen.blit(info_font.render("Download", True, (30, 30, 30)), (DL_CONFIRM_BTN_RECT.x + 17, DL_CONFIRM_BTN_RECT.y + 6))
+
+    if download_in_progress:
+        dim_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dim_overlay.fill((110, 110, 110, 150))
+        screen.blit(dim_overlay, (0, 0))
+
+        panel_w = min(760, WIDTH - 80)
+        panel_h = 170
+        panel = pygame.Rect((WIDTH - panel_w) // 2, (HEIGHT - panel_h) // 2, panel_w, panel_h)
+        pygame.draw.rect(screen, (245, 245, 245), panel, border_radius=10)
+        pygame.draw.rect(screen, (185, 185, 185), panel, width=2, border_radius=10)
+
+        title = tutorial_font.render(f"Download {state_label}", True, state_color)
+        screen.blit(title, (panel.x + 20, panel.y + 18))
+
+        status_line = info_font.render(download_status_msg or "Working...", True, (50, 50, 50))
+        screen.blit(status_line, (panel.x + 20, panel.y + 58))
+
+        bar_rect = pygame.Rect(panel.x + 20, panel.y + 102, panel.width - 40, 24)
+        pygame.draw.rect(screen, (220, 220, 220), bar_rect, border_radius=6)
+        pygame.draw.rect(screen, (170, 170, 170), bar_rect, width=1, border_radius=6)
+        ratio = _download_progress_ratio(download_progress_text)
+        if ratio is not None:
+            fill_w = max(2, int(bar_rect.width * ratio))
+            fill_rect = pygame.Rect(bar_rect.x, bar_rect.y, fill_w, bar_rect.height)
+            pygame.draw.rect(screen, (65, 125, 190), fill_rect, border_radius=6)
+
+        progress_label = download_progress_text or "Please wait..."
+        progress_surf = info_font.render(progress_label, True, (40, 40, 40))
+        screen.blit(progress_surf, (bar_rect.right - progress_surf.get_width() - 10, bar_rect.y + 1))
 
     if show_tutorial:
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
