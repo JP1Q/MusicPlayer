@@ -167,7 +167,7 @@ DOWNLOAD_STATES = ("idle", "queued", "downloading", "success", "error")
 # States that must lock download input/mode controls.
 DOWNLOAD_ACTIVE_STATES = {"queued", "downloading"}
 # Maximum rendered length of raw yt-dlp reason text.
-MAX_DOWNLOAD_ERROR_LINE_LEN = max(4, 80)
+MAX_DOWNLOAD_ERROR_LINE_LEN = 80
 DOWNLOAD_STATES_WITH_PROGRESS = {"queued", "downloading", "success"}
 download_state = "idle"
 download_progress_text = ""
@@ -293,6 +293,7 @@ def _build_download_error_feedback(last_line: str, fallback: str) -> tuple[str, 
 
 
 def _download_progress_ratio(progress_text: str) -> float | None:
+    """Convert text like '42%' to a normalized 0..1 float; return None if invalid."""
     if not progress_text:
         return None
     t = progress_text.strip()
@@ -1670,8 +1671,9 @@ while running:
         pygame.draw.rect(screen, (220, 220, 220), bar_rect, border_radius=6)
         pygame.draw.rect(screen, (170, 170, 170), bar_rect, width=1, border_radius=6)
         ratio = _download_progress_ratio(download_progress_text)
-        if ratio is not None and ratio > 0:
-            fill_rect = pygame.Rect(bar_rect.x, bar_rect.y, int(bar_rect.width * ratio), bar_rect.height)
+        if ratio is not None:
+            fill_w = max(2, int(bar_rect.width * ratio))
+            fill_rect = pygame.Rect(bar_rect.x, bar_rect.y, fill_w, bar_rect.height)
             pygame.draw.rect(screen, (65, 125, 190), fill_rect, border_radius=6)
 
         progress_label = download_progress_text or "Please wait..."
