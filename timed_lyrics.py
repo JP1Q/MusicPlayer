@@ -83,6 +83,7 @@ class TimedLyrics:
                 minutes = int(m.group(1))
                 seconds = int(m.group(2))
                 milliseconds_str = m.group(3) or "0"
+                # Normalize both centiseconds ("50") and milliseconds ("500") into ms.
                 millis = int(milliseconds_str.ljust(3, "0")[:3])
                 total = minutes * 60 + seconds + (millis / 1000.0)
                 out.append(LyricLine(time_seconds=total, text=lyric_text))

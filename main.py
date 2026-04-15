@@ -1290,8 +1290,6 @@ while running:
     screen.blit(lib_overlay, lib_area.topleft)
 
     if top_submenu == "library":
-        if mouse_click and LYRICS_PANEL_RECT.collidepoint(mouse_pos):
-            pass
         if mouse_click and LYRICS_TOGGLE_RECT.collidepoint(mouse_pos):
             show_lyrics_panel = not show_lyrics_panel
             lyrics_scroll_px = 0.0
