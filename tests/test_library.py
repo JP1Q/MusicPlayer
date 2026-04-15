@@ -129,6 +129,17 @@ class LibraryTests(unittest.TestCase):
             with patch.object(library_module, "File", return_value=_Audio({"TXXX:playlist": _MockAlbumTag("Live Set")})):
                 self.assertEqual(lib._album_name("any.mp3"), "Live Set")
 
+    def test_album_name_prefers_album_tag_over_playlist_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(library_module, "File", return_value=None):
+                lib = Library(tmp)
+
+            with patch.object(library_module, "File", return_value=_Audio({
+                "album": ["Studio Album"],
+                "TXXX:PLAYLIST": _MockAlbumTag("Playlist Name"),
+            })):
+                self.assertEqual(lib._album_name("any.mp3"), "Studio Album")
+
 
 if __name__ == "__main__":
     unittest.main()

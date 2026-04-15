@@ -27,22 +27,23 @@ class Library:
                 files.append(name)
         return files
 
-    def _album_name(self, filepath: str) -> str:
-        def _tag_text(value) -> str | None:
-            try:
-                if hasattr(value, "text"):
-                    seq = getattr(value, "text")
-                    if isinstance(seq, (list, tuple)) and seq:
-                        text = str(seq[0]).strip()
-                        return text or None
-                if isinstance(value, (list, tuple)) and value:
-                    text = str(value[0]).strip()
+    @staticmethod
+    def _tag_text(value) -> str | None:
+        try:
+            if hasattr(value, "text"):
+                seq = getattr(value, "text")
+                if isinstance(seq, (list, tuple)) and seq:
+                    text = str(seq[0]).strip()
                     return text or None
-                text = str(value).strip()
+            if isinstance(value, (list, tuple)) and value:
+                text = str(value[0]).strip()
                 return text or None
-            except Exception:
-                return None
+            text = str(value).strip()
+            return text or None
+        except Exception:
+            return None
 
+    def _album_name(self, filepath: str) -> str:
         try:
             audio = File(filepath)
             if audio is None or audio.tags is None:
@@ -56,14 +57,14 @@ class Library:
             for key in ("album", "©alb"):
                 if key in tags:
                     try:
-                        text = _tag_text(tags[key])
+                        text = self._tag_text(tags[key])
                         if text:
                             return text
                     except Exception:
                         pass
             for key in ("TXXX:PLAYLIST", "TXXX:playlist", "playlist"):
                 if key in tags:
-                    text = _tag_text(tags[key])
+                    text = self._tag_text(tags[key])
                     if text:
                         return text
         except Exception:
