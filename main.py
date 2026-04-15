@@ -28,10 +28,41 @@ from library import Library
 
 CUSTOM_FONT_PATH = None
 
+
+def resource_path(rel_path: str) -> str:
+    """Return absolute path to a resource.
+
+    Works in dev (running from source) and in PyInstaller (files end up in
+    the _internal folder / sys._MEIPASS)."""
+    try:
+        base = getattr(sys, "_MEIPASS")  # type: ignore[attr-defined]
+        return os.path.join(base, rel_path)
+    except Exception:
+        return os.path.join(os.path.abspath("."), rel_path)
+
 BG_IMAGE_PATH = "bg.png"
 BG_IMAGE_ALPHA = 140
-LIBRARY_DIR = "library"
-VIDEOS_DIR = "videos"
+
+
+def _is_android() -> bool:
+    return sys.platform in {"android"}
+
+
+def _app_storage_dir() -> str | None:
+    """Return writable internal app storage root on Android, else None."""
+    if not _is_android():
+        return None
+    try:
+        from android.storage import app_storage_path  # type: ignore
+
+        return str(app_storage_path())
+    except Exception:
+        return None
+
+
+_ANDROID_ROOT = _app_storage_dir()
+LIBRARY_DIR = os.path.join(_ANDROID_ROOT, "library") if _ANDROID_ROOT else "library"
+VIDEOS_DIR = os.path.join(_ANDROID_ROOT, "videos") if _ANDROID_ROOT else "videos"
 
 if not os.path.exists(LIBRARY_DIR):
     os.makedirs(LIBRARY_DIR)
@@ -41,14 +72,18 @@ if not os.path.exists(VIDEOS_DIR):
 pygame.init()
 pygame.mixer.init()
 
+# text pro UI okolo yt-dlp (status/percent) x3
+yt_input_text = ""
+
 WIDTH, HEIGHT = 1280, 720
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("UkasCoUmis MP3 Player")
 clock = pygame.time.Clock()
 
 try:
-    if os.path.exists(BG_IMAGE_PATH):
-        bg_image = pygame.image.load(BG_IMAGE_PATH).convert_alpha()
+    bg_path = resource_path(BG_IMAGE_PATH)
+    if os.path.exists(bg_path):
+        bg_image = pygame.image.load(bg_path).convert_alpha()
         bg_image = pygame.transform.scale(bg_image, (WIDTH // 2, HEIGHT))
         bg_image.set_alpha(BG_IMAGE_ALPHA)
     else:
@@ -57,8 +92,9 @@ except Exception as e:
     bg_image = None
 
 try:
-    if os.path.exists("volume.png"):
-        vol_knob_img = pygame.image.load("volume.png").convert_alpha()
+    vol_path = resource_path("volume.png")
+    if os.path.exists(vol_path):
+        vol_knob_img = pygame.image.load(vol_path).convert_alpha()
         vol_knob_img = pygame.transform.smoothscale(vol_knob_img, (40, 40))
     else:
         vol_knob_img = None
@@ -66,21 +102,24 @@ except Exception:
     vol_knob_img = None
 
 try:
-    play_img = pygame.image.load("play.png").convert_alpha() if os.path.exists("play.png") else None
+    play_path = resource_path("play.png")
+    play_img = pygame.image.load(play_path).convert_alpha() if os.path.exists(play_path) else None
     if play_img:
         play_img = pygame.transform.smoothscale(play_img, (40, 40))
 except Exception:
     play_img = None
 
 try:
-    pause_img = pygame.image.load("pause.png").convert_alpha() if os.path.exists("pause.png") else None
+    pause_path = resource_path("pause.png")
+    pause_img = pygame.image.load(pause_path).convert_alpha() if os.path.exists(pause_path) else None
     if pause_img:
         pause_img = pygame.transform.smoothscale(pause_img, (40, 40))
 except Exception:
     pause_img = None
 
 try:
-    pattern_img = pygame.image.load("pattern.png").convert_alpha() if os.path.exists("pattern.png") else None
+    pattern_path = resource_path("pattern.png")
+    pattern_img = pygame.image.load(pattern_path).convert_alpha() if os.path.exists(pattern_path) else None
     if pattern_img:
         pattern_img = pattern_img.copy()
         pattern_img.set_alpha(40)
@@ -88,8 +127,9 @@ except Exception:
     pattern_img = None
 
 try:
-    if os.path.exists("arrow.png"):
-        arrow_img = pygame.image.load("arrow.png").convert_alpha()
+    arrow_path = resource_path("arrow.png")
+    if os.path.exists(arrow_path):
+        arrow_img = pygame.image.load(arrow_path).convert_alpha()
         arrow_img = pygame.transform.smoothscale(
             arrow_img,
             (max(1, int(arrow_img.get_width() * 0.42)), max(1, int(arrow_img.get_height() * 0.42)))
@@ -411,16 +451,22 @@ def download_youtube(url):
             download_in_progress = True
             download_status_msg = "Downloading..."
             # čteme stdout od yt-dlp, ať UI vidí procenta; šablona zvládne i playlisty x3
+            # NOTE: bestaudio + --restrict-filenames makes names predictable on Windows.
+            # Add uploader + id to avoid collisions / wrong overwrites when titles repeat.
             cmd = [
                 "yt-dlp",
+                "-f", "bestaudio/best",
                 "-x",
                 "--audio-format", "mp3",
+                "--audio-quality", "0",
                 "--add-metadata",
                 "--embed-thumbnail",
+                "--restrict-filenames",
+                "--no-overwrites",
                 "--newline",
                 "--progress",
                 "--no-part",
-                "-o", os.path.join(LIBRARY_DIR, "%(title)s.%(ext)s"),
+                "-o", os.path.join(LIBRARY_DIR, "%(uploader)s_%(title)s_%(id)s.%(ext)s"),
                 url,
             ]
 
@@ -458,7 +504,7 @@ def download_youtube(url):
                         download_status_msg = yt_input_text
 
                     # během stahování občas refresh knihovny (playlisty se sypou postupně) x3
-                    if "[ExtractAudio]" in last_line or "Destination" in last_line:
+                    if "[ExtractAudio]" in last_line or "Destination" in last_line or "Downloading item" in last_line:
                         next_library_refresh = 0
 
             rc = proc.wait()
@@ -500,14 +546,18 @@ def download_youtube_video_audio(url):
             download_status_msg = "Downloading (video)..."
             cmd = [
                 "yt-dlp",
+                "-f", "bestaudio/best",
                 "-x",
                 "--audio-format", "mp3",
+                "--audio-quality", "0",
                 "--add-metadata",
                 "--embed-thumbnail",
+                "--restrict-filenames",
+                "--no-overwrites",
                 "--newline",
                 "--progress",
                 "--no-part",
-                "-o", os.path.join(VIDEOS_DIR, "%(title)s.%(ext)s"),
+                "-o", os.path.join(VIDEOS_DIR, "%(uploader)s_%(title)s_%(id)s.%(ext)s"),
                 url,
             ]
 
@@ -539,7 +589,7 @@ def download_youtube_video_audio(url):
                         yt_input_text = "Downloading (video)..."
                         download_status_msg = yt_input_text
 
-                    if "[ExtractAudio]" in last_line or "Destination" in last_line:
+                    if "[ExtractAudio]" in last_line or "Destination" in last_line or "Downloading item" in last_line:
                         next_library_refresh = 0
 
             rc = proc.wait()
