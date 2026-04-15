@@ -8,7 +8,7 @@ cd "$ROOT_DIR"
 # Build a debug APK using buildozer (run inside WSL/Linux).
 #
 # Usage (WSL):
-#   cd /home/runner/work/MusicPlayer/MusicPlayer
+#   cd /path/to/MusicPlayer
 #   ./tools/build_android.sh
 
 if [ "$(uname -s)" != "Linux" ]; then
@@ -52,4 +52,3 @@ else
   echo "Check Buildozer output above for errors." >&2
   exit 1
 fi
-

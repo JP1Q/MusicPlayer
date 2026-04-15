@@ -18,7 +18,7 @@ Výstup bude v `..\dist\` (PyInstaller default).
 Buildozer se typicky pouští ve WSL/Linuxu. Doporučení:
 
 ```bash
-cd /home/runner/work/MusicPlayer/MusicPlayer
+cd /path/to/MusicPlayer
 ./tools/build_android.sh
 ```
 

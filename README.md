@@ -108,7 +108,7 @@ Use Linux/WSL for Android builds.
 sudo apt update
 sudo apt install -y git zip unzip openjdk-17-jdk python3 python3-venv python3-pip
 
-cd /home/runner/work/MusicPlayer/MusicPlayer
+cd /path/to/MusicPlayer
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
@@ -211,4 +211,3 @@ rm -rf .buildozer build_workspace/out/android
 ## License
 
 No license file yet.
-
