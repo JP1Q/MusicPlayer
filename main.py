@@ -26,6 +26,7 @@ from pygame.locals import *
 
 from library import Library
 from timed_lyrics import TimedLyrics
+from volume_knob import VolumeKnobController
 
 CUSTOM_FONT_PATH = None
 
@@ -204,11 +205,17 @@ def _volume_ui_to_gain(x: float) -> float:
 
 volume_ui = 0.5
 pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
-is_dragging_vol = False
 vol_knob_center = (500, 582)
 vol_knob_radius = 20
 VOL_ANGLE_MIN = -135.0
 VOL_ANGLE_MAX = 135.0
+volume_knob = VolumeKnobController(
+    center=vol_knob_center,
+    radius=vol_knob_radius,
+    value=volume_ui,
+    min_angle=VOL_ANGLE_MIN,
+    max_angle=VOL_ANGLE_MAX,
+)
 
 # Cat mosh extra state (for beat-ish bursts)
 prev_energy_pat = 0.0
@@ -985,9 +992,9 @@ while running:
             
         elif event.type == MOUSEBUTTONDOWN:
             if event.button == 1:
-                dist = math.hypot(mouse_pos[0] - vol_knob_center[0], mouse_pos[1] - vol_knob_center[1])
-                if dist <= vol_knob_radius:
-                    is_dragging_vol = True
+                if volume_knob.start_drag(mouse_pos):
+                    volume_ui = volume_knob.value
+                    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
                 else:
                     mouse_click = True
             elif event.button == 4:
@@ -1069,17 +1076,11 @@ while running:
 
         elif event.type == MOUSEBUTTONUP:
             if event.button == 1:
-                is_dragging_vol = False
+                volume_knob.stop_drag()
                 
         elif event.type == MOUSEMOTION:
-            if is_dragging_vol:
-                # lineární ovládání hlasitosti podle úhlu kolem knoflíku x3
-                mx, my = mouse_pos
-                ang = math.degrees(math.atan2(my - vol_knob_center[1], mx - vol_knob_center[0]))
-                # převod úhlu na rozsah 0..1 (clamp)
-                ang = max(VOL_ANGLE_MIN, min(VOL_ANGLE_MAX, ang))
-                volume_ui = (ang - VOL_ANGLE_MIN) / (VOL_ANGLE_MAX - VOL_ANGLE_MIN)
-                volume_ui = max(0.0, min(1.0, float(volume_ui)))
+            if volume_knob.drag(mouse_pos):
+                volume_ui = volume_knob.value
                 pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
 
     pygame.draw.rect(screen, (210, 210, 210), (0, 0, HALF_W, HEIGHT))
@@ -1295,7 +1296,7 @@ while running:
 
     if vol_knob_img:
         # lineární mapování volume -> úhel knoflíku x3
-        angle_deg = VOL_ANGLE_MAX - (volume_ui * (VOL_ANGLE_MAX - VOL_ANGLE_MIN))
+        angle_deg = volume_knob.sprite_rotation_degrees()
         rotated_knob = pygame.transform.rotate(vol_knob_img, angle_deg)
         knob_rect = rotated_knob.get_rect(center=vol_knob_center)
         screen.blit(rotated_knob, knob_rect.topleft)
