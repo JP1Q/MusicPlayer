@@ -63,6 +63,12 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+## Tests
+
+```powershell
+python -m unittest discover -v
+```
+
 ## Build
 
 ### Windows EXE
@@ -149,7 +155,8 @@ Build output (debug APK artifact):
 - Left/Right arrows: seek -5s/+5s
 - Click the progress bar to jump
 - Drag the volume knob to change volume
-- Paste a YouTube link in the download box (bottom-right) and press Enter.
+- In the right half header, click top submenu **Download**, then go through **source -> options -> confirm**.
+- Download UI shows explicit states (idle/queued/downloading/success/error), progress, and error next steps.
 
 ## Screenshots
 
@@ -160,6 +167,10 @@ Build output (debug APK artifact):
 ### Playing (visuals + cats)
 
 ![Playing](screenshots/02-playing-visuals.png)
+
+### Download feedback states
+
+![Download feedback states](screenshots/03-download-feedback-states.png)
 
 ## Contributing
 
