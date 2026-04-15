@@ -424,7 +424,7 @@ def play_song(filename):
 
 
 def play_video_song(filename: str):
-    global current_song, is_playing, current_offset, current_track_path, song_length, album_art, is_loading_metadata
+    global current_song, is_playing, current_offset, current_track_path, song_length, album_art, is_loading_metadata, status_msg
     filepath = os.path.join(VIDEOS_DIR, filename)
     if not os.path.exists(filepath):
         return
@@ -443,7 +443,7 @@ def play_video_song(filename: str):
         threading.Thread(target=_prepare_audio_vis, args=(filepath, filepath), daemon=True).start()
         _bump_play_count("videos", filename)
     except Exception:
-        pass
+        status_msg = f"Can't play: {filename}"
 
 
 def seek_to_seconds(target_seconds: float):

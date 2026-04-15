@@ -37,7 +37,7 @@ class TimedLyrics:
             return
         try:
             lines = self.parse_lrc_text_file(lrc_path)
-        except Exception:
+        except (OSError, UnicodeError):
             self.clear("Failed to parse lyrics file")
             return
         if not lines:
