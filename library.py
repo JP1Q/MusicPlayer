@@ -61,7 +61,7 @@ class Library:
                             return text
                     except Exception:
                         pass
-            for key in ("playlist", "TXXX:PLAYLIST", "TXXX:playlist"):
+            for key in ("TXXX:PLAYLIST", "TXXX:playlist", "playlist"):
                 if key in tags:
                     text = _tag_text(tags[key])
                     if text:
