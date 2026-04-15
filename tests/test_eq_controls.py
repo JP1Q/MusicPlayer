@@ -33,6 +33,12 @@ class EqControlsTests(unittest.TestCase):
         controls.end_drag()
         self.assertIsNone(controls.drag_to((0, 49)))
 
+    def test_drag_to_ignores_invalid_active_knob_name(self):
+        controls = EqualizerControls([KnobControl(name="volume", label="Vol", center=(50, 50), radius=20)])
+        controls.active_drag_name = "missing"
+        self.assertIsNone(controls.drag_to((50, 50)))
+        self.assertIsNone(controls.active_drag_name)
+
 
 if __name__ == "__main__":
     unittest.main()

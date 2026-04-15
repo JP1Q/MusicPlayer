@@ -18,6 +18,10 @@ class KnobControl:
         return math.hypot(point[0] - self.center[0], point[1] - self.center[1]) <= self.radius
 
     def set_from_pointer(self, point: tuple[int, int]) -> bool:
+        """Update knob value from pointer position.
+
+        Returns True when the knob value changed, False when it stayed the same.
+        """
         previous_value = self.value
         ang = math.degrees(math.atan2(point[1] - self.center[1], point[0] - self.center[0]))
         ang = max(self.angle_min, min(self.angle_max, ang))
@@ -58,9 +62,16 @@ class EqualizerControls:
         self.active_drag_name = None
 
     def drag_to(self, point: tuple[int, int]) -> str | None:
+        """Apply dragging to the active knob.
+
+        Returns the knob name when the drag changed that knob's value, else None.
+        """
         if not self.active_drag_name:
             return None
-        knob = self._knobs_by_name[self.active_drag_name]
+        knob = self._knobs_by_name.get(self.active_drag_name)
+        if knob is None:
+            self.active_drag_name = None
+            return None
         changed = knob.set_from_pointer(point)
         if changed:
             return knob.name

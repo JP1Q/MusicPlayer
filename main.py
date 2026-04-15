@@ -203,6 +203,19 @@ def _volume_ui_to_gain(x: float) -> float:
     return float(10.0 ** (db / 20.0))
 
 
+def _eq_presence_gain() -> float:
+    """Return a simple output gain multiplier from EQ knob positions.
+
+    pygame.mixer has no built-in per-band EQ, so low/mid/high knobs are combined
+    into a conservative output gain range [0.7, 1.3] to produce audible changes
+    without clipping too aggressively.
+    """
+    low = eq_controls.knob("low").value
+    mid = eq_controls.knob("mid").value
+    high = eq_controls.knob("high").value
+    return 0.7 + ((low + mid + high) / 3.0) * 0.6
+
+
 eq_controls = EqualizerControls(
     [
         KnobControl(name="volume", label="Vol", center=(410, 582), radius=20, value=0.5),
@@ -213,11 +226,12 @@ eq_controls = EqualizerControls(
 )
 
 
-def _apply_volume_from_knob() -> None:
-    pygame.mixer.music.set_volume(_volume_ui_to_gain(eq_controls.knob("volume").value))
+def _apply_volume_and_eq() -> None:
+    raw_gain = _volume_ui_to_gain(eq_controls.knob("volume").value) * _eq_presence_gain()
+    pygame.mixer.music.set_volume(max(0.0, min(1.0, raw_gain)))
 
 
-_apply_volume_from_knob()
+_apply_volume_and_eq()
 
 # Cat mosh extra state (for beat-ish bursts)
 prev_energy_pat = 0.0
@@ -957,7 +971,8 @@ def get_music_energy():
     # Fallback: deterministic pseudo-signal tied to playback time
     t = get_playback_seconds()
     e = abs(math.sin(t * 2.6)) * 60 + abs(math.sin(t * 7.4)) * 25
-    audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + eq_controls.knob("volume").value)) * 0.15
+    eq_factor = _eq_presence_gain()
+    audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + eq_controls.knob("volume").value) * eq_factor) * 0.15
     return audio_vis_energy_smooth
 
 while running:
@@ -1079,8 +1094,8 @@ while running:
                 
         elif event.type == MOUSEMOTION:
             changed_knob = eq_controls.drag_to(mouse_pos)
-            if changed_knob == "volume":
-                _apply_volume_from_knob()
+            if changed_knob in {"volume", "low", "mid", "high"}:
+                _apply_volume_and_eq()
 
     pygame.draw.rect(screen, (210, 210, 210), (0, 0, HALF_W, HEIGHT))
     pygame.draw.rect(screen, (235, 235, 235), (HALF_W, 0, HALF_W, HEIGHT))
