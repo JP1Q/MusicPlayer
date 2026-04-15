@@ -63,6 +63,12 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+## Tests
+
+```powershell
+python -m unittest discover -v
+```
+
 ## Build
 
 ### Windows EXE
