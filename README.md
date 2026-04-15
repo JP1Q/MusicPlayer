@@ -112,8 +112,6 @@ If you manage to get a clean APK build on real devices, please open a PR with no
 
 ## Screenshots
 
-> Put the images in `./screenshots/` with these exact filenames.
-
 ### Home (idle)
 
 ![Home (idle)](screenshots/01-home-idle.png)
