@@ -6,12 +6,12 @@ from pathlib import Path
 
 try:
     import requests
-except Exception:
+except ImportError:
     requests = None
 
 try:
     from mutagen import File as MutagenFile
-except Exception:
+except ImportError:
     MutagenFile = None
 
 
