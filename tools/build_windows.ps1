@@ -79,7 +79,7 @@ if ($BuildInstaller) {
         exit 1
     }
 
-    & $iscc.Path "/DSourceDir=$appDistDir" "/DOutputDir=$releasePath" $issPath | Out-Host
+    & $iscc.Path "/DSourceDir=$appDistDir" "/DOutputDir=$releasePath" $issPath
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[!] Inno Setup build failed with exit code $LASTEXITCODE" -ForegroundColor Red
         exit $LASTEXITCODE

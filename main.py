@@ -71,8 +71,6 @@ def _windows_storage_dir() -> str | None:
     base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
     if not base:
         base = os.path.join(os.path.expanduser("~"), "AppData", "Local")
-    if not base:
-        return None
     return os.path.join(base, "UkasCoUmis")
 
 
