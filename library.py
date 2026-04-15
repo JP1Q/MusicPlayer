@@ -111,7 +111,7 @@ class Library:
 
     @staticmethod
     def _tag_int(value) -> int | None:
-        """Extract integer from common tag formats like `['2/12']`, text tags, or plain values."""
+        """Extract integer from tag values like track `2/12`, `.text` tags, or plain numbers."""
         try:
             if hasattr(value, "text"):
                 value = value.text[0]
@@ -159,6 +159,7 @@ class Library:
 
     def _rebuild_items(self) -> None:
         def _entry_sort_key(entry: Dict) -> tuple:
+            # When grouping by artist, songs stay ordered by album first, then track/index.
             prefix = (entry["album"].lower(),) if self._group_mode == "artist" else ()
             return prefix + (entry["track"] is None, entry["track"] or 0, entry["index"])
 
@@ -175,8 +176,8 @@ class Library:
                 years = [e["year"] for e in groups[name] if e.get("year") is not None]
                 if years:
                     return (0, min(years), name.lower())
-                # First tuple value keeps groups without year metadata after known-year groups.
-                # MAX_YEAR_SENTINEL is safely above valid 4-digit years used in this app.
+                # Groups without year metadata are sorted after groups with years (1 > 0).
+                # MAX_YEAR_SENTINEL keeps their secondary year position consistently last.
                 return (1, self.MAX_YEAR_SENTINEL, name.lower())
 
             group_names.sort(key=_group_age)
