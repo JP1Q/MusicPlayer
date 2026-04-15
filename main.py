@@ -26,6 +26,7 @@ from pygame.locals import *
 
 from library import Library
 from timed_lyrics import TimedLyrics
+from eq_controls import EqualizerControls, KnobControl
 
 CUSTOM_FONT_PATH = None
 
@@ -202,13 +203,21 @@ def _volume_ui_to_gain(x: float) -> float:
     return float(10.0 ** (db / 20.0))
 
 
-volume_ui = 0.5
-pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
-is_dragging_vol = False
-vol_knob_center = (500, 582)
-vol_knob_radius = 20
-VOL_ANGLE_MIN = -135.0
-VOL_ANGLE_MAX = 135.0
+eq_controls = EqualizerControls(
+    [
+        KnobControl(name="volume", label="Vol", center=(410, 582), radius=20, value=0.5),
+        KnobControl(name="low", label="Low", center=(470, 582), radius=20, value=0.5),
+        KnobControl(name="mid", label="Mid", center=(530, 582), radius=20, value=0.5),
+        KnobControl(name="high", label="High", center=(590, 582), radius=20, value=0.5),
+    ]
+)
+
+
+def _apply_volume_from_knob() -> None:
+    pygame.mixer.music.set_volume(_volume_ui_to_gain(eq_controls.knob("volume").value))
+
+
+_apply_volume_from_knob()
 
 # Cat mosh extra state (for beat-ish bursts)
 prev_energy_pat = 0.0
@@ -948,7 +957,7 @@ def get_music_energy():
     # Fallback: deterministic pseudo-signal tied to playback time
     t = get_playback_seconds()
     e = abs(math.sin(t * 2.6)) * 60 + abs(math.sin(t * 7.4)) * 25
-    audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + volume_ui)) * 0.15
+    audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + eq_controls.knob("volume").value)) * 0.15
     return audio_vis_energy_smooth
 
 while running:
@@ -985,10 +994,7 @@ while running:
             
         elif event.type == MOUSEBUTTONDOWN:
             if event.button == 1:
-                dist = math.hypot(mouse_pos[0] - vol_knob_center[0], mouse_pos[1] - vol_knob_center[1])
-                if dist <= vol_knob_radius:
-                    is_dragging_vol = True
-                else:
+                if not eq_controls.begin_drag(mouse_pos):
                     mouse_click = True
             elif event.button == 4:
                 if mouse_pos[0] > HALF_W:
@@ -1069,18 +1075,12 @@ while running:
 
         elif event.type == MOUSEBUTTONUP:
             if event.button == 1:
-                is_dragging_vol = False
+                eq_controls.end_drag()
                 
         elif event.type == MOUSEMOTION:
-            if is_dragging_vol:
-                # lineární ovládání hlasitosti podle úhlu kolem knoflíku x3
-                mx, my = mouse_pos
-                ang = math.degrees(math.atan2(my - vol_knob_center[1], mx - vol_knob_center[0]))
-                # převod úhlu na rozsah 0..1 (clamp)
-                ang = max(VOL_ANGLE_MIN, min(VOL_ANGLE_MAX, ang))
-                volume_ui = (ang - VOL_ANGLE_MIN) / (VOL_ANGLE_MAX - VOL_ANGLE_MIN)
-                volume_ui = max(0.0, min(1.0, float(volume_ui)))
-                pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
+            changed_knob = eq_controls.drag_to(mouse_pos)
+            if changed_knob == "volume":
+                _apply_volume_from_knob()
 
     pygame.draw.rect(screen, (210, 210, 210), (0, 0, HALF_W, HEIGHT))
     pygame.draw.rect(screen, (235, 235, 235), (HALF_W, 0, HALF_W, HEIGHT))
@@ -1293,21 +1293,18 @@ while running:
                 else:
                     pygame.mixer.music.unpause()
 
-    if vol_knob_img:
-        # lineární mapování volume -> úhel knoflíku x3
-        angle_deg = VOL_ANGLE_MAX - (volume_ui * (VOL_ANGLE_MAX - VOL_ANGLE_MIN))
-        rotated_knob = pygame.transform.rotate(vol_knob_img, angle_deg)
-        knob_rect = rotated_knob.get_rect(center=vol_knob_center)
-        screen.blit(rotated_knob, knob_rect.topleft)
-    else:
-        pygame.draw.circle(screen, (0, 0, 0), vol_knob_center, vol_knob_radius, 3)
-        angle = -math.pi * 0.75 + (volume_ui * math.pi * 1.5)
-        end_x = vol_knob_center[0] + math.sin(angle) * (vol_knob_radius - 4)
-        end_y = vol_knob_center[1] - math.cos(angle) * (vol_knob_radius - 4)
-        pygame.draw.line(screen, (0, 0, 0), vol_knob_center, (end_x, end_y), 4)
+    for knob in eq_controls.knobs:
+        if vol_knob_img:
+            rotated_knob = pygame.transform.rotate(vol_knob_img, knob.render_angle())
+            knob_rect = rotated_knob.get_rect(center=knob.center)
+            screen.blit(rotated_knob, knob_rect.topleft)
+        else:
+            pygame.draw.circle(screen, (0, 0, 0), knob.center, knob.radius, 3)
+            end_x, end_y = knob.line_indicator_end()
+            pygame.draw.line(screen, (0, 0, 0), knob.center, (end_x, end_y), 4)
 
-    vol_text = info_font.render(f"Vol: {int(volume_ui*100)}%", True, (100, 100, 100))
-    screen.blit(vol_text, (vol_knob_center[0] - vol_text.get_width()//2, vol_knob_center[1] + vol_knob_radius + 5))
+        knob_text = info_font.render(f"{knob.label}: {knob.percent()}%", True, (100, 100, 100))
+        screen.blit(knob_text, (knob.center[0] - knob_text.get_width()//2, knob.center[1] + knob.radius + 5))
 
     # Progress bar: always visible (neon blue background + pink progress)
     NEON_BLUE = (0, 240, 255)

@@ -14,7 +14,7 @@ It's a hobby project. It works, but it's not polished - that's kind of the point
 - Download/extract audio from YouTube using `yt-dlp`
 - Search/filter the library
 - Seek by clicking the progress bar
-- Volume knob
+- Volume + EQ knobs (low/mid/high)
 - Reads metadata + tries to fetch album art
 - Reactive visuals + cat moshpit
 
@@ -113,7 +113,7 @@ If you manage to get a clean APK build on real devices, please open a PR with no
 - Space: play/pause
 - Left/Right arrows: seek -5s/+5s
 - Click the progress bar to jump
-- Drag the volume knob to change volume
+- Drag the knobs to change volume and low/mid/high EQ levels
 - In the right half header, click top submenu **Download**, then go through **source -> options -> confirm**.
 - Download UI shows explicit states (idle/queued/downloading/success/error), progress, and error next steps.
 
