@@ -27,6 +27,22 @@ class Library:
                 files.append(name)
         return files
 
+    @staticmethod
+    def _tag_text(value) -> str | None:
+        try:
+            if hasattr(value, "text"):
+                seq = getattr(value, "text")
+                if isinstance(seq, (list, tuple)) and seq:
+                    text = str(seq[0]).strip()
+                    return text or None
+            if isinstance(value, (list, tuple)) and value:
+                text = str(value[0]).strip()
+                return text or None
+            text = str(value).strip()
+            return text or None
+        except Exception:
+            return None
+
     def _album_name(self, filepath: str) -> str:
         try:
             audio = File(filepath)
@@ -41,12 +57,16 @@ class Library:
             for key in ("album", "©alb"):
                 if key in tags:
                     try:
-                        value = tags[key]
-                        if isinstance(value, (list, tuple)):
-                            return str(value[0])
-                        return str(value)
+                        text = self._tag_text(tags[key])
+                        if text:
+                            return text
                     except Exception:
                         pass
+            for key in ("TXXX:PLAYLIST", "TXXX:playlist", "playlist"):
+                if key in tags:
+                    text = self._tag_text(tags[key])
+                    if text:
+                        return text
         except Exception:
             pass
         return "Unknown Album"
@@ -137,4 +157,3 @@ class Library:
             out.insert(0, last_album)
 
         self.render_items = out
-
