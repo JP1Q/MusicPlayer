@@ -23,6 +23,7 @@ class VolumeKnobController:
     def _angle_from_position(self, mouse_pos: tuple[int, int]) -> float:
         mx, my = mouse_pos
         cx, cy = self.center
+        # Screen Y grows downward, invert Y-delta so "up" maps to larger angle/value.
         return math.degrees(math.atan2(cy - my, mx - cx))
 
     def _value_from_position(self, mouse_pos: tuple[int, int]) -> float:

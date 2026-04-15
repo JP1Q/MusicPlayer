@@ -955,7 +955,7 @@ def get_music_energy():
     # Fallback: deterministic pseudo-signal tied to playback time
     t = get_playback_seconds()
     e = abs(math.sin(t * 2.6)) * 60 + abs(math.sin(t * 7.4)) * 25
-    audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + volume_ui)) * 0.15
+    audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + volume_knob.value)) * 0.15
     return audio_vis_energy_smooth
 
 while running:
@@ -993,8 +993,7 @@ while running:
         elif event.type == MOUSEBUTTONDOWN:
             if event.button == 1:
                 if volume_knob.start_drag(mouse_pos):
-                    volume_ui = volume_knob.value
-                    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
+                    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_knob.value))
                 else:
                     mouse_click = True
             elif event.button == 4:
@@ -1080,8 +1079,7 @@ while running:
                 
         elif event.type == MOUSEMOTION:
             if volume_knob.drag(mouse_pos):
-                volume_ui = volume_knob.value
-                pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
+                pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_knob.value))
 
     pygame.draw.rect(screen, (210, 210, 210), (0, 0, HALF_W, HEIGHT))
     pygame.draw.rect(screen, (235, 235, 235), (HALF_W, 0, HALF_W, HEIGHT))
@@ -1302,12 +1300,12 @@ while running:
         screen.blit(rotated_knob, knob_rect.topleft)
     else:
         pygame.draw.circle(screen, (0, 0, 0), vol_knob_center, vol_knob_radius, 3)
-        angle = -math.pi * 0.75 + (volume_ui * math.pi * 1.5)
+        angle = -math.pi * 0.75 + (volume_knob.value * math.pi * 1.5)
         end_x = vol_knob_center[0] + math.sin(angle) * (vol_knob_radius - 4)
         end_y = vol_knob_center[1] - math.cos(angle) * (vol_knob_radius - 4)
         pygame.draw.line(screen, (0, 0, 0), vol_knob_center, (end_x, end_y), 4)
 
-    vol_text = info_font.render(f"Vol: {int(volume_ui*100)}%", True, (100, 100, 100))
+    vol_text = info_font.render(f"Vol: {int(volume_knob.value*100)}%", True, (100, 100, 100))
     screen.blit(vol_text, (vol_knob_center[0] - vol_text.get_width()//2, vol_knob_center[1] + vol_knob_radius + 5))
 
     # Progress bar: always visible (neon blue background + pink progress)
