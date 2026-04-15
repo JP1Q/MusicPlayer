@@ -161,7 +161,14 @@ is_loading_metadata = False
 status_msg = ""
 download_status_msg = ""
 download_in_progress = False
-download_state = "idle"  # idle / queued / downloading / success / error
+# Download UX state vocabulary used by renderer + input locking.
+DOWNLOAD_STATES = ("idle", "queued", "downloading", "success", "error")
+# States that must lock download input/mode controls.
+DOWNLOAD_ACTIVE_STATES = {"queued", "downloading"}
+# Maximum rendered length of raw yt-dlp reason text.
+MAX_DOWNLOAD_ERROR_LINE_LEN = max(4, 80)
+DOWNLOAD_STATES_WITH_PROGRESS = {"queued", "downloading", "success"}
+download_state = "idle"
 download_progress_text = ""
 download_error_next_step = ""
 visuals = [0 for _ in range(40)]
@@ -230,15 +237,31 @@ was_busy = False
 
 
 def _set_download_state(state: str, status: str, progress: str = "", next_step: str = "") -> None:
+    """Update download UI state fields.
+
+    `download_in_progress` is derived from membership in `DOWNLOAD_ACTIVE_STATES`
+    so input/mode controls stay locked only for active download states.
+    """
     global download_state, download_status_msg, download_progress_text, download_error_next_step, download_in_progress
+    if state not in DOWNLOAD_STATES:
+        state = "error"
     download_state = state
     download_status_msg = status
     download_progress_text = progress
     download_error_next_step = next_step
-    download_in_progress = state in {"queued", "downloading"}
+    download_in_progress = state in DOWNLOAD_ACTIVE_STATES
 
 
 def _build_download_error_feedback(last_line: str, fallback: str) -> tuple[str, str]:
+    """Build download error feedback.
+
+    Args:
+        last_line: Last known yt-dlp output line (best-effort reason source).
+        fallback: Generic fallback reason when no specific detail is available.
+
+    Returns:
+        Tuple[str, str]: (error_message, next_step_guidance).
+    """
     line = (last_line or "").strip()
     low = line.lower()
 
@@ -253,7 +276,11 @@ def _build_download_error_feedback(last_line: str, fallback: str) -> tuple[str, 
     if "http error 403" in low or "forbidden" in low:
         return "Download failed: access denied (403).", "Retry later or try a different source."
     if line:
-        trimmed = line if len(line) <= 80 else f"{line[:77]}..."
+        max_len = MAX_DOWNLOAD_ERROR_LINE_LEN
+        if len(line) <= max_len:
+            trimmed = line
+        else:
+            trimmed = f"{line[:max_len - 3]}..."
         return f"Download failed: {trimmed}", "Check the link and your internet connection, then retry."
     return fallback, "Check the link and your internet connection, then retry."
 
@@ -480,6 +507,7 @@ def download_youtube(url):
     _set_download_state("queued", "Preparing download...", "0%")
     def yt_thread():
         global yt_input_text, next_library_refresh
+        last_line = ""
         try:
             _set_download_state("downloading", "Downloading music...", "0%")
             # čteme stdout od yt-dlp, ať UI vidí procenta; šablona zvládne i playlisty x3
@@ -514,8 +542,6 @@ def download_youtube(url):
             )
 
             percent = None
-            last_line = ""
-
             if proc.stdout:
                 for line in proc.stdout:
                     last_line = line.strip()
@@ -573,6 +599,7 @@ def download_youtube_video_audio(url):
 
     def yt_thread():
         global yt_input_text, next_library_refresh
+        last_line = ""
         try:
             _set_download_state("downloading", "Downloading video audio...", "0%")
             cmd = [
@@ -604,7 +631,6 @@ def download_youtube_video_audio(url):
             )
 
             percent = None
-            last_line = ""
             if proc.stdout:
                 for line in proc.stdout:
                     last_line = line.strip()
@@ -1350,7 +1376,7 @@ while running:
     state_label = state_labels.get(download_state, "Idle")
     state_color = state_colors.get(download_state, (90, 90, 90))
     state_text = f"state: {state_label}"
-    if download_progress_text and download_state in {"queued", "downloading", "success"}:
+    if download_progress_text and download_state in DOWNLOAD_STATES_WITH_PROGRESS:
         state_text += f" ({download_progress_text})"
     d_state = info_font.render(state_text, True, state_color)
     screen.blit(d_state, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 90))
