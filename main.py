@@ -217,6 +217,10 @@ volume_knob = VolumeKnobController(
     max_angle=VOL_ANGLE_MAX,
 )
 
+
+def _apply_volume_from_knob() -> None:
+    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_knob.value))
+
 # Cat mosh extra state (for beat-ish bursts)
 prev_energy_pat = 0.0
 last_mosh_burst_ms = 0
@@ -993,7 +997,7 @@ while running:
         elif event.type == MOUSEBUTTONDOWN:
             if event.button == 1:
                 if volume_knob.start_drag(mouse_pos):
-                    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_knob.value))
+                    _apply_volume_from_knob()
                 else:
                     mouse_click = True
             elif event.button == 4:
@@ -1079,7 +1083,7 @@ while running:
                 
         elif event.type == MOUSEMOTION:
             if volume_knob.drag(mouse_pos):
-                pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_knob.value))
+                _apply_volume_from_knob()
 
     pygame.draw.rect(screen, (210, 210, 210), (0, 0, HALF_W, HEIGHT))
     pygame.draw.rect(screen, (235, 235, 235), (HALF_W, 0, HALF_W, HEIGHT))
