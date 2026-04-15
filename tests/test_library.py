@@ -21,6 +21,11 @@ class _MockAlbumTag:
         self.text = [value]
 
 
+class _MockTextTag:
+    def __init__(self, value):
+        self.text = [value]
+
+
 class _Audio:
     def __init__(self, tags):
         self.tags = tags
@@ -49,9 +54,9 @@ class LibraryTests(unittest.TestCase):
                     pass
 
             with patch.object(library_module, "File", side_effect=_create_mock_audio_file_loader({
-                "a.mp3": "Alpha",
-                "z.ogg": "Alpha",
-                "b.mp3": "Beta",
+                "a.mp3": {"album": ["Alpha"], "tracknumber": ["1"]},
+                "z.ogg": {"album": ["Alpha"], "tracknumber": ["2"]},
+                "b.mp3": {"album": ["Beta"], "tracknumber": ["1"]},
             })):
                 lib = Library(tmp)
 
@@ -59,10 +64,10 @@ class LibraryTests(unittest.TestCase):
                 lib.render_items,
                 [
                     {"type": "album", "text": "Alpha"},
-                    {"type": "song", "filename": "a.mp3", "text": "a"},
-                    {"type": "song", "filename": "z.ogg", "text": "z"},
+                    {"type": "song", "filename": "a.mp3", "text": "a", "album": "Alpha", "artist": "Unknown Artist"},
+                    {"type": "song", "filename": "z.ogg", "text": "z", "album": "Alpha", "artist": "Unknown Artist"},
                     {"type": "album", "text": "Beta"},
-                    {"type": "song", "filename": "b.mp3", "text": "b"},
+                    {"type": "song", "filename": "b.mp3", "text": "b", "album": "Beta", "artist": "Unknown Artist"},
                 ],
             )
 
@@ -84,7 +89,7 @@ class LibraryTests(unittest.TestCase):
                 lib.render_items,
                 [
                     {"type": "album", "text": "Beta"},
-                    {"type": "song", "filename": "b.mp3", "text": "b"},
+                    {"type": "song", "filename": "b.mp3", "text": "b", "album": "Beta", "artist": "Unknown Artist"},
                 ],
             )
 
@@ -117,6 +122,46 @@ class LibraryTests(unittest.TestCase):
 
             with patch.object(library_module, "File", side_effect=RuntimeError("read error")):
                 self.assertEqual(lib._album_name("any.mp3"), "Unknown Album")
+
+    def test_group_by_artist_and_search_artist_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("a.mp3", "b.mp3"):
+                with open(os.path.join(tmp, name), "wb"):
+                    pass
+
+            with patch.object(library_module, "File", side_effect=_create_mock_audio_file_loader({
+                "a.mp3": {"album": ["Album A"], "artist": ["Artist A"], "title": ["Song A"], "tracknumber": ["1"]},
+                "b.mp3": {"album": ["Album B"], "artist": ["Artist B"], "title": ["Song B"], "tracknumber": ["1"]},
+            })):
+                lib = Library(tmp)
+
+            lib.set_group_mode("artist")
+            lib.set_search("artist b")
+
+            self.assertEqual(
+                lib.render_items,
+                [
+                    {"type": "album", "text": "Artist B"},
+                    {"type": "song", "filename": "b.mp3", "text": "Song B", "album": "Album B", "artist": "Artist B"},
+                ],
+            )
+
+    def test_order_mode_age_sorts_groups_by_year(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("new.mp3", "old.mp3"):
+                with open(os.path.join(tmp, name), "wb"):
+                    pass
+
+            with patch.object(library_module, "File", side_effect=_create_mock_audio_file_loader({
+                "new.mp3": {"album": ["New Album"], "tracknumber": ["1"], "year": ["2015"]},
+                "old.mp3": {"album": ["Old Album"], "tracknumber": ["1"], "TDRC": _MockTextTag("1999")},
+            })):
+                lib = Library(tmp)
+
+            lib.set_order_mode("age")
+
+            album_headers = [item["text"] for item in lib.render_items if item["type"] == "album"]
+            self.assertEqual(album_headers, ["Old Album", "New Album"])
 
 
 if __name__ == "__main__":

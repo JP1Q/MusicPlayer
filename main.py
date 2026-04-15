@@ -229,18 +229,30 @@ download_source = "music"  # music / videos
 
 search_text = ""
 search_active = False
+group_mode = "album"
+order_mode = "alphabet"
 
 
 show_tutorial = True
 tutorial_index = 0
 
-# alias kvůli hledání: `library` míří defaultně na music (search volá library.set_search) x3
-library = music_library
 LIBRARY_REFRESH_MS = 4000
 next_library_refresh = 0
 scroll_y = 0
 
 was_busy = False
+
+
+def _apply_library_filters() -> None:
+    music_library.set_group_mode(group_mode)
+    videos_library.set_group_mode(group_mode)
+    music_library.set_order_mode(order_mode)
+    videos_library.set_order_mode(order_mode)
+    music_library.set_search(search_text)
+    videos_library.set_search(search_text)
+
+
+_apply_library_filters()
 
 
 def _set_download_state(state: str, status: str, progress: str = "", next_step: str = "") -> None:
@@ -746,10 +758,12 @@ ART_RECT = pygame.Rect((HALF_W - 480) // 2, 50, 480, 480)
 PLAY_BTN = pygame.Rect(HALF_W // 2 - 30 - 40, 560, 40, 45)
 PAUSE_BTN = pygame.Rect(HALF_W // 2 + 30, 560, 40, 45)
 PROGRESS_BAR_RECT = pygame.Rect(80, 640, 480, 8)
-SEARCH_RECT = pygame.Rect(HALF_W + 280, 18, HALF_W - 300, 26)
 TOP_SUBMENU_LIBRARY_RECT = pygame.Rect(HALF_W + 20, 16, 74, 28)
 TOP_SUBMENU_DOWNLOAD_RECT = pygame.Rect(TOP_SUBMENU_LIBRARY_RECT.right + 8, 16, 96, 28)
-LYRICS_TOGGLE_RECT = pygame.Rect(TOP_SUBMENU_DOWNLOAD_RECT.right + 8, 16, 86, 28)
+GROUP_TOGGLE_RECT = pygame.Rect(TOP_SUBMENU_DOWNLOAD_RECT.right + 8, 16, 86, 28)
+ORDER_TOGGLE_RECT = pygame.Rect(GROUP_TOGGLE_RECT.right + 8, 16, 96, 28)
+LYRICS_TOGGLE_RECT = pygame.Rect(ORDER_TOGGLE_RECT.right + 8, 16, 80, 28)
+SEARCH_RECT = pygame.Rect(LYRICS_TOGGLE_RECT.right + 8, 18, WIDTH - (LYRICS_TOGGLE_RECT.right + 28), 26)
 DL_SOURCE_MUSIC_RECT = pygame.Rect(HALF_W + 36, 120, 210, 42)
 DL_SOURCE_VIDEOS_RECT = pygame.Rect(HALF_W + 264, 120, 210, 42)
 DL_INPUT_RECT = pygame.Rect(HALF_W + 36, 205, 438, 32)
@@ -792,7 +806,7 @@ tutorial_steps = [
         "side": "top",
     },
     {
-        "text": "6. Pole 'hledat' filtruje knihovnu podle názvu alba nebo skladby.",
+        "text": "6. Pole 'hledat' filtruje knihovnu podle alba, interpreta nebo skladby.",
         "target": "search",
         "side": "bottom",
     },
@@ -1045,12 +1059,12 @@ while running:
                     pass
                 elif event.key == K_BACKSPACE:
                     search_text = search_text[:-1]
-                    library.set_search(search_text)
+                    _apply_library_filters()
                 else:
                     ch = event.unicode
                     if ch and ch >= " " and ch != "\x7f":
                         search_text += ch
-                        library.set_search(search_text)
+                        _apply_library_filters()
             else:
                 if event.key == K_SPACE:
                     playing_now = is_playing and pygame.mixer.music.get_busy()
@@ -1343,15 +1357,38 @@ while running:
     elif mouse_click and TOP_SUBMENU_DOWNLOAD_RECT.collidepoint(mouse_pos):
         top_submenu = "download"
         search_active = False
+    elif mouse_click and top_submenu == "library" and GROUP_TOGGLE_RECT.collidepoint(mouse_pos):
+        group_mode = "artist" if group_mode == "album" else "album"
+        collapsed_albums_music.clear()
+        collapsed_albums_videos.clear()
+        _apply_library_filters()
+    elif mouse_click and top_submenu == "library" and ORDER_TOGGLE_RECT.collidepoint(mouse_pos):
+        if order_mode == "alphabet":
+            order_mode = "age"
+        elif order_mode == "age":
+            order_mode = "random"
+        else:
+            order_mode = "alphabet"
+        _apply_library_filters()
 
     lib_btn_col = (255, 255, 255) if top_submenu == "library" else (228, 228, 228)
     dl_btn_col = (255, 255, 255) if top_submenu == "download" else (228, 228, 228)
+    grp_btn_col = (255, 255, 255) if top_submenu == "library" else (228, 228, 228)
+    ord_btn_col = (255, 255, 255) if top_submenu == "library" else (228, 228, 228)
     pygame.draw.rect(screen, lib_btn_col, TOP_SUBMENU_LIBRARY_RECT, border_radius=8)
     pygame.draw.rect(screen, (170, 170, 170), TOP_SUBMENU_LIBRARY_RECT, 1, border_radius=8)
     pygame.draw.rect(screen, dl_btn_col, TOP_SUBMENU_DOWNLOAD_RECT, border_radius=8)
     pygame.draw.rect(screen, (170, 170, 170), TOP_SUBMENU_DOWNLOAD_RECT, 1, border_radius=8)
+    pygame.draw.rect(screen, grp_btn_col, GROUP_TOGGLE_RECT, border_radius=8)
+    pygame.draw.rect(screen, (170, 170, 170), GROUP_TOGGLE_RECT, 1, border_radius=8)
+    pygame.draw.rect(screen, ord_btn_col, ORDER_TOGGLE_RECT, border_radius=8)
+    pygame.draw.rect(screen, (170, 170, 170), ORDER_TOGGLE_RECT, 1, border_radius=8)
     screen.blit(info_font.render("Library", True, (40, 40, 40)), (TOP_SUBMENU_LIBRARY_RECT.x + 7, TOP_SUBMENU_LIBRARY_RECT.y + 3))
     screen.blit(info_font.render("Download", True, (40, 40, 40)), (TOP_SUBMENU_DOWNLOAD_RECT.x + 7, TOP_SUBMENU_DOWNLOAD_RECT.y + 3))
+    group_label = "By album" if group_mode == "album" else "By artist"
+    order_label = "A->Z" if order_mode == "alphabet" else ("By age" if order_mode == "age" else "Random")
+    screen.blit(info_font.render(group_label, True, (40, 40, 40)), (GROUP_TOGGLE_RECT.x + 6, GROUP_TOGGLE_RECT.y + 3))
+    screen.blit(info_font.render(order_label, True, (40, 40, 40)), (ORDER_TOGGLE_RECT.x + 6, ORDER_TOGGLE_RECT.y + 3))
 
     state_labels = {
         "idle": "Idle",
@@ -1525,14 +1562,10 @@ while running:
             search_active = SEARCH_RECT.collidepoint(mouse_pos)
         dl_input_active = False
 
-        search_caption = info_font.render("hledat:", True, (50, 50, 50))
-        search_caption_x = SEARCH_RECT.x - search_caption.get_width() - 8
-        screen.blit(search_caption, (search_caption_x, 20))
-
         s_color = (255, 255, 255) if search_active else (230, 230, 230)
         pygame.draw.rect(screen, s_color, SEARCH_RECT)
         pygame.draw.rect(screen, (180, 180, 180), SEARCH_RECT, 1)
-        s_surf = info_font.render(search_text or "alb nebo song", True, (120, 120, 120) if not search_text else (0, 0, 0))
+        s_surf = info_font.render(search_text or "album/artist/song", True, (120, 120, 120) if not search_text else (0, 0, 0))
         s_x = SEARCH_RECT.x + 5
         if s_surf.get_width() > SEARCH_RECT.width - 10:
             s_x -= (s_surf.get_width() - (SEARCH_RECT.width - 10))
