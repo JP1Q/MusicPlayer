@@ -80,6 +80,10 @@ if ($BuildInstaller) {
     }
 
     & $iscc.Path "/DSourceDir=$appDistDir" "/DOutputDir=$releasePath" $issPath | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[!] Inno Setup build failed with exit code $LASTEXITCODE" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
 }
 
 Write-Host "`nBuild complete. Dist: $appDistDir" -ForegroundColor Green
@@ -88,4 +92,3 @@ if ($BuildInstaller) {
     Write-Host "Installer output: $releasePath" -ForegroundColor Green
 }
 Write-Host "Tip: For full yt-dlp functionality inside the release, ship ffmpeg + ffprobe with the release zip." -ForegroundColor DarkGray
-
