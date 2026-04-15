@@ -6,14 +6,17 @@ import unittest
 from unittest.mock import patch
 
 if "mutagen" not in sys.modules:
-    _mutagen = types.ModuleType("mutagen")
-    _mutagen.File = lambda *_args, **_kwargs: None
-    sys.modules["mutagen"] = _mutagen
+    mock_mutagen = types.ModuleType("mutagen")
+    mock_mutagen.File = lambda *_args, **_kwargs: None
+    sys.modules["mutagen"] = mock_mutagen
 
-from library import Library
+import library as library_module
 
 
-class _TalbTag:
+Library = library_module.Library
+
+
+class _MockAlbumTag:
     def __init__(self, value):
         self.text = [value]
 
@@ -23,8 +26,8 @@ class _Audio:
         self.tags = tags
 
 
-def _file_reader_from_album_map(album_by_file):
-    def _reader(path):
+def _create_mock_audio_file_loader(album_by_file):
+    def _load_mock_audio(path):
         filename = os.path.basename(path)
         value = album_by_file.get(filename)
         if isinstance(value, Exception):
@@ -35,7 +38,7 @@ def _file_reader_from_album_map(album_by_file):
             return _Audio(value)
         return _Audio({"album": [value]})
 
-    return _reader
+    return _load_mock_audio
 
 
 class LibraryTests(unittest.TestCase):
@@ -45,7 +48,7 @@ class LibraryTests(unittest.TestCase):
                 with open(os.path.join(tmp, name), "wb"):
                     pass
 
-            with patch("library.File", side_effect=_file_reader_from_album_map({
+            with patch.object(library_module, "File", side_effect=_create_mock_audio_file_loader({
                 "a.mp3": "Alpha",
                 "z.ogg": "Alpha",
                 "b.mp3": "Beta",
@@ -69,7 +72,7 @@ class LibraryTests(unittest.TestCase):
                 with open(os.path.join(tmp, name), "wb"):
                     pass
 
-            with patch("library.File", side_effect=_file_reader_from_album_map({
+            with patch.object(library_module, "File", side_effect=_create_mock_audio_file_loader({
                 "a.mp3": "Alpha",
                 "b.mp3": "Beta",
             })):
@@ -90,26 +93,29 @@ class LibraryTests(unittest.TestCase):
             with open(os.path.join(tmp, "a.mp3"), "wb"):
                 pass
 
-            with patch("library.File", return_value=None):
+            with patch.object(library_module, "File", return_value=None):
                 lib = Library(tmp)
 
-            with patch.object(lib, "_album_name", wraps=lib._album_name) as wrapped_album_name:
+            with patch.object(lib, "_album_name", wraps=lib._album_name) as mock_album_name:
                 self.assertFalse(lib.refresh())
-                wrapped_album_name.assert_not_called()
+                mock_album_name.assert_not_called()
 
-            with patch.object(lib, "_album_name", wraps=lib._album_name) as wrapped_album_name:
+            with patch.object(lib, "_album_name", wraps=lib._album_name) as mock_album_name:
                 self.assertTrue(lib.refresh(force=True))
-                wrapped_album_name.assert_called_once()
+                mock_album_name.assert_called_once()
 
     def test_album_name_prefers_talb_then_falls_back_to_unknown(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("library.File", return_value=None):
+            with patch.object(library_module, "File", return_value=None):
                 lib = Library(tmp)
 
-            with patch("library.File", return_value=_Audio({"TALB": _TalbTag("Album From TALB")})):
+            with patch.object(library_module, "File", return_value=_Audio({"TALB": _MockAlbumTag("Album From TALB")})):
                 self.assertEqual(lib._album_name("any.mp3"), "Album From TALB")
 
-            with patch("library.File", side_effect=RuntimeError("read error")):
+            with patch.object(library_module, "File", return_value=_Audio({"album": ["Album Fallback"]})):
+                self.assertEqual(lib._album_name("any.mp3"), "Album Fallback")
+
+            with patch.object(library_module, "File", side_effect=RuntimeError("read error")):
                 self.assertEqual(lib._album_name("any.mp3"), "Unknown Album")
 
 
