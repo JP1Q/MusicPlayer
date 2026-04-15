@@ -161,6 +161,9 @@ is_loading_metadata = False
 status_msg = ""
 download_status_msg = ""
 download_in_progress = False
+download_state = "idle"  # idle / queued / downloading / success / error
+download_progress_text = ""
+download_error_next_step = ""
 visuals = [0 for _ in range(40)]
 # chaos fáze pro vizuál (ať je to ujetý) x3
 visual_phase = [random.uniform(0, math.tau) for _ in range(40)]
@@ -224,6 +227,35 @@ next_library_refresh = 0
 scroll_y = 0
 
 was_busy = False
+
+
+def _set_download_state(state: str, status: str, progress: str = "", next_step: str = "") -> None:
+    global download_state, download_status_msg, download_progress_text, download_error_next_step, download_in_progress
+    download_state = state
+    download_status_msg = status
+    download_progress_text = progress
+    download_error_next_step = next_step
+    download_in_progress = state in {"queued", "downloading"}
+
+
+def _build_download_error_feedback(last_line: str, fallback: str) -> tuple[str, str]:
+    line = (last_line or "").strip()
+    low = line.lower()
+
+    if "ffmpeg" in low or "ffprobe" in low:
+        return "Download failed: ffmpeg not found.", "Install ffmpeg (and ffprobe), then retry."
+    if "unsupported url" in low or "url could be" in low:
+        return "Download failed: unsupported or invalid link.", "Paste a full YouTube URL and try again."
+    if "private video" in low or "is private" in low:
+        return "Download failed: video is private.", "Use a public video URL or one you can access."
+    if "sign in to confirm your age" in low or "age-restricted" in low:
+        return "Download failed: age-restricted content.", "Try a different video or use yt-dlp with account cookies."
+    if "http error 403" in low or "forbidden" in low:
+        return "Download failed: access denied (403).", "Retry later or try a different source."
+    if line:
+        trimmed = line if len(line) <= 80 else f"{line[:77]}..."
+        return f"Download failed: {trimmed}", "Check the link and your internet connection, then retry."
+    return fallback, "Check the link and your internet connection, then retry."
 
 
 def _iter_section_songs(items: list[dict], section: str) -> list[tuple[str, str]]:
@@ -442,14 +474,14 @@ def seek_relative(delta_seconds: float):
     seek_to_seconds(pos_now + delta_seconds)
 
 def download_youtube(url):
-    global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+    global yt_input_text, next_library_refresh
     old_text = yt_input_text
-    yt_input_text = "Downloading: 0%"
+    yt_input_text = "Queued..."
+    _set_download_state("queued", "Preparing download...", "0%")
     def yt_thread():
-        global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+        global yt_input_text, next_library_refresh
         try:
-            download_in_progress = True
-            download_status_msg = "Downloading..."
+            _set_download_state("downloading", "Downloading music...", "0%")
             # čteme stdout od yt-dlp, ať UI vidí procenta; šablona zvládne i playlisty x3
             # NOTE: bestaudio + --restrict-filenames makes names predictable on Windows.
             # Add uploader + id to avoid collisions / wrong overwrites when titles repeat.
@@ -498,10 +530,10 @@ def download_youtube(url):
 
                     if percent:
                         yt_input_text = f"Downloading: {percent}"
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading music...", percent)
                     else:
                         yt_input_text = "Downloading..."
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading music...")
 
                     # během stahování občas refresh knihovny (playlisty se sypou postupně) x3
                     if "[ExtractAudio]" in last_line or "Destination" in last_line or "Downloading item" in last_line:
@@ -510,12 +542,12 @@ def download_youtube(url):
             rc = proc.wait()
             if rc != 0:
                 yt_input_text = old_text
-                download_status_msg = "Download failed"
-                download_in_progress = False
+                err_msg, next_step = _build_download_error_feedback(last_line, f"Download failed (exit code {rc}).")
+                _set_download_state("error", err_msg, next_step=next_step)
                 return
 
             yt_input_text = ""
-            download_status_msg = "Download completed"
+            _set_download_state("success", "Download completed.", "100%")
 
             # po konci chvilku čekáme (ffmpeg/thumbnail), pak refresh x3
             try:
@@ -525,25 +557,24 @@ def download_youtube(url):
                 pass
 
             next_library_refresh = 0
-            download_in_progress = False
-        except Exception:
+        except Exception as e:
             yt_input_text = old_text
-            download_status_msg = "Download error"
-            download_in_progress = False
+            err_msg, next_step = _build_download_error_feedback(str(e), "Download error.")
+            _set_download_state("error", err_msg, next_step=next_step)
     threading.Thread(target=yt_thread, daemon=True).start()
 
 
 def download_youtube_video_audio(url):
     """Download audio from videos into VIDEOS_DIR."""
-    global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+    global yt_input_text, next_library_refresh
     old_text = yt_input_text
-    yt_input_text = "Downloading (video): 0%"
+    yt_input_text = "Queued..."
+    _set_download_state("queued", "Preparing video download...", "0%")
 
     def yt_thread():
-        global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
+        global yt_input_text, next_library_refresh
         try:
-            download_in_progress = True
-            download_status_msg = "Downloading (video)..."
+            _set_download_state("downloading", "Downloading video audio...", "0%")
             cmd = [
                 "yt-dlp",
                 "-f", "bestaudio/best",
@@ -573,6 +604,7 @@ def download_youtube_video_audio(url):
             )
 
             percent = None
+            last_line = ""
             if proc.stdout:
                 for line in proc.stdout:
                     last_line = line.strip()
@@ -584,10 +616,10 @@ def download_youtube_video_audio(url):
                                 break
                     if percent:
                         yt_input_text = f"Downloading (video): {percent}"
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading video audio...", percent)
                     else:
                         yt_input_text = "Downloading (video)..."
-                        download_status_msg = yt_input_text
+                        _set_download_state("downloading", "Downloading video audio...")
 
                     if "[ExtractAudio]" in last_line or "Destination" in last_line or "Downloading item" in last_line:
                         next_library_refresh = 0
@@ -595,19 +627,18 @@ def download_youtube_video_audio(url):
             rc = proc.wait()
             if rc != 0:
                 yt_input_text = old_text
-                download_status_msg = "Download failed"
-                download_in_progress = False
+                err_msg, next_step = _build_download_error_feedback(last_line, f"Download failed (exit code {rc}).")
+                _set_download_state("error", err_msg, next_step=next_step)
                 return
 
             yt_input_text = ""
-            download_status_msg = "Download completed"
+            _set_download_state("success", "Download completed.", "100%")
             time.sleep(0.6)
             next_library_refresh = 0
-            download_in_progress = False
-        except Exception:
+        except Exception as e:
             yt_input_text = old_text
-            download_status_msg = "Download error"
-            download_in_progress = False
+            err_msg, next_step = _build_download_error_feedback(str(e), "Download error.")
+            _set_download_state("error", err_msg, next_step=next_step)
 
     threading.Thread(target=yt_thread, daemon=True).start()
 
@@ -869,33 +900,34 @@ while running:
                 elif event.key in (K_RETURN, K_ESCAPE):
                     show_tutorial = False
             elif dl_input_active:
-                if event.key == K_RETURN:
-                    u = dl_input_text.strip()
-                    if u and "http" in u:
-                        if dl_mode == "videos":
-                            download_youtube_video_audio(u)
-                        else:
-                            download_youtube(u)
-                elif event.key == K_TAB:
-                    dl_mode = "videos" if dl_mode == "music" else "music"
-                elif event.key == K_v and (event.mod & KMOD_CTRL):
-                    try:
-                        import pygame.scrap
-                        if not pygame.scrap.get_init():
-                            pygame.scrap.init()
-                        data = pygame.scrap.get(SCRAP_TEXT)
-                        if data:
-                            text = data.decode("utf-8", errors="ignore").replace("\x00", "")
-                            filtered = "".join(ch for ch in text if ch >= " " and ch != "\x7f")
-                            dl_input_text += filtered
-                    except Exception:
-                        pass
-                elif event.key == K_BACKSPACE:
-                    dl_input_text = dl_input_text[:-1]
-                else:
-                    ch = event.unicode
-                    if ch and ch >= " " and ch != "\x7f":
-                        dl_input_text += ch
+                if not download_in_progress:
+                    if event.key == K_RETURN:
+                        u = dl_input_text.strip()
+                        if u and "http" in u:
+                            if dl_mode == "videos":
+                                download_youtube_video_audio(u)
+                            else:
+                                download_youtube(u)
+                    elif event.key == K_TAB:
+                        dl_mode = "videos" if dl_mode == "music" else "music"
+                    elif event.key == K_v and (event.mod & KMOD_CTRL):
+                        try:
+                            import pygame.scrap
+                            if not pygame.scrap.get_init():
+                                pygame.scrap.init()
+                            data = pygame.scrap.get(SCRAP_TEXT)
+                            if data:
+                                text = data.decode("utf-8", errors="ignore").replace("\x00", "")
+                                filtered = "".join(ch for ch in text if ch >= " " and ch != "\x7f")
+                                dl_input_text += filtered
+                        except Exception:
+                            pass
+                    elif event.key == K_BACKSPACE:
+                        dl_input_text = dl_input_text[:-1]
+                    else:
+                        ch = event.unicode
+                        if ch and ch >= " " and ch != "\x7f":
+                            dl_input_text += ch
             elif search_active:
                 if event.key == K_RETURN:
                     pass
@@ -1301,30 +1333,60 @@ while running:
     dl_lbl = info_font.render("paste link to download:", True, (50, 50, 50))
     screen.blit(dl_lbl, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 25))
 
-    # show download status
-    if download_in_progress and download_status_msg:
-        d = info_font.render(download_status_msg, True, (80, 80, 80))
-        screen.blit(d, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 48))
+    state_labels = {
+        "idle": "Idle",
+        "queued": "Queued",
+        "downloading": "Downloading",
+        "success": "Success",
+        "error": "Error",
+    }
+    state_colors = {
+        "idle": (90, 90, 90),
+        "queued": (120, 100, 40),
+        "downloading": (45, 95, 155),
+        "success": (28, 120, 70),
+        "error": (170, 45, 45),
+    }
+    state_label = state_labels.get(download_state, "Idle")
+    state_color = state_colors.get(download_state, (90, 90, 90))
+    state_text = f"state: {state_label}"
+    if download_progress_text and download_state in {"queued", "downloading", "success"}:
+        state_text += f" ({download_progress_text})"
+    d_state = info_font.render(state_text, True, state_color)
+    screen.blit(d_state, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 90))
+
+    status_text = download_status_msg or "Ready to download."
+    d_status = info_font.render(status_text, True, (70, 70, 70))
+    screen.blit(d_status, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 66))
+    if download_state == "error" and download_error_next_step:
+        d_next = info_font.render(f"next: {download_error_next_step}", True, (140, 50, 50))
+        screen.blit(d_next, (DL_INPUT_RECT.x, DL_INPUT_RECT.y - 42))
 
     if mouse_click:
         dl_input_active = DL_INPUT_RECT.collidepoint(mouse_pos)
         search_active = SEARCH_RECT.collidepoint(mouse_pos)
 
-        if DL_MODE_BTN_RECT.collidepoint(mouse_pos):
+        if DL_MODE_BTN_RECT.collidepoint(mouse_pos) and not download_in_progress:
             dl_mode = "videos" if dl_mode == "music" else "music"
             dl_input_active = True
 
-    input_color = (200, 200, 200) if not dl_input_active else (255, 255, 255)
+    if download_in_progress:
+        input_color = (220, 220, 220)
+    else:
+        input_color = (200, 200, 200) if not dl_input_active else (255, 255, 255)
     pygame.draw.rect(screen, input_color, DL_INPUT_RECT)
     pygame.draw.rect(screen, (180, 180, 180), DL_INPUT_RECT, 1)
 
     mode_caption = "Music" if dl_mode == "music" else "Videos"
-    pygame.draw.rect(screen, (225, 225, 225), DL_MODE_BTN_RECT)
+    mode_btn_color = (210, 210, 210) if download_in_progress else (225, 225, 225)
+    mode_txt_color = (120, 120, 120) if download_in_progress else (30, 30, 30)
+    pygame.draw.rect(screen, mode_btn_color, DL_MODE_BTN_RECT)
     pygame.draw.rect(screen, (180, 180, 180), DL_MODE_BTN_RECT, 1)
-    m = info_font.render(mode_caption, True, (30, 30, 30))
+    m = info_font.render(mode_caption, True, mode_txt_color)
     screen.blit(m, (DL_MODE_BTN_RECT.centerx - m.get_width() // 2, DL_MODE_BTN_RECT.y + 4))
 
-    rendered_input = info_font.render(dl_input_text, True, (0, 0, 0))
+    input_text_color = (80, 80, 80) if download_in_progress else (0, 0, 0)
+    rendered_input = info_font.render(dl_input_text, True, input_text_color)
     txt_x = DL_INPUT_RECT.x + 5
     if rendered_input.get_width() > DL_INPUT_RECT.width - 10:
         txt_x -= (rendered_input.get_width() - (DL_INPUT_RECT.width - 10))

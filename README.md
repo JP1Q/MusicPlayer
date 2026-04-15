@@ -109,6 +109,7 @@ If you manage to get a clean APK build on real devices, please open a PR with no
 - Click the progress bar to jump
 - Drag the volume knob to change volume
 - Paste a YouTube link in the download box (bottom-right) and press Enter.
+- Download box now shows explicit states (idle/queued/downloading/success/error), progress, and error next steps.
 
 ## Screenshots
 
@@ -119,6 +120,10 @@ If you manage to get a clean APK build on real devices, please open a PR with no
 ### Playing (visuals + cats)
 
 ![Playing](screenshots/02-playing-visuals.png)
+
+### Download feedback states
+
+![Download feedback states](screenshots/03-download-feedback-states.png)
 
 ## Contributing
 
@@ -159,5 +164,4 @@ python -m pip install --upgrade pip
 ## License
 
 No license file yet.
-
 
