@@ -61,10 +61,16 @@ def _app_storage_dir() -> str | None:
 
 
 def _windows_storage_dir() -> str | None:
-    """Return writable app storage root on frozen Windows builds."""
+    """Return writable app storage root on frozen Windows builds.
+
+    Falls back to %USERPROFILE%\\AppData\\Local\\UkasCoUmis when APPDATA vars
+    are not present.
+    """
     if os.name != "nt" or not getattr(sys, "frozen", False):
         return None
     base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), "AppData", "Local")
     if not base:
         return None
     return os.path.join(base, "UkasCoUmis")

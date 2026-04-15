@@ -75,7 +75,7 @@ if ($BuildInstaller) {
         $iscc = Get-Command "ISCC" -ErrorAction SilentlyContinue
     }
     if (-not $iscc) {
-        Write-Host "[!] Inno Setup compiler (ISCC) was not found on PATH." -ForegroundColor Red
+        Write-Host "[!] Inno Setup compiler (ISCC) was not found on PATH. Install it with 'choco install innosetup -y' or from https://jrsoftware.org/isdl.php." -ForegroundColor Red
         exit 1
     }
 
@@ -88,5 +88,4 @@ if ($BuildInstaller) {
     Write-Host "Installer output: $releasePath" -ForegroundColor Green
 }
 Write-Host "Tip: For full yt-dlp functionality inside the release, ship ffmpeg + ffprobe with the release zip." -ForegroundColor DarkGray
-
 
