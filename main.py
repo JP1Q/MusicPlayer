@@ -25,6 +25,7 @@ from mutagen import File
 from pygame.locals import *
 
 from library import Library
+from timed_lyrics import TimedLyrics
 
 CUSTOM_FONT_PATH = None
 
@@ -205,10 +206,14 @@ last_mosh_burst_ms = 0
 
 # Posun uvnitř aktuální skladby (s)
 current_offset = 0.0
+current_track_path: str | None = None
+lyrics_sync = TimedLyrics()
+lyrics_scroll_px = 0.0
 
 dl_input_text = ""
 dl_input_active = False
 top_submenu = "library"  # library / download
+show_lyrics_panel = False
 download_step = "source"  # source -> options -> confirm
 download_source = "music"  # music / videos
 
@@ -257,11 +262,7 @@ def _get_visible_playlist() -> list[tuple[str, str]]:
 
 def _play_from_section(section: str, filename: str) -> None:
     if section == "videos":
-        fp = os.path.join(VIDEOS_DIR, filename)
-        if os.path.exists(fp):
-            pygame.mixer.music.load(fp)
-            pygame.mixer.music.play()
-            _bump_play_count("videos", filename)
+        play_video_song(filename)
     else:
         play_song(filename)
 
@@ -397,18 +398,20 @@ def extract_metadata(filepath):
         pending_art_stream = "CLEAR"
 
 def play_song(filename):
-    global current_song, is_playing, status_msg, album_art, song_length, is_loading_metadata, current_offset
+    global current_song, is_playing, status_msg, album_art, song_length, is_loading_metadata, current_offset, current_track_path
     filepath = os.path.join(LIBRARY_DIR, filename)
     if os.path.exists(filepath):
         try:
             pygame.mixer.music.load(filepath)
             pygame.mixer.music.play()
             current_song = filename
+            current_track_path = filepath
             is_playing = True
             album_art = None
             song_length = 0
             current_offset = 0.0
             is_loading_metadata = True
+            lyrics_sync.load_for_audio(filepath)
             threading.Thread(target=extract_metadata, args=(filepath,), daemon=True).start()
             # připrav PCM pro vizuál na pozadí (když to půjde) x3
             threading.Thread(target=_prepare_audio_vis, args=(filepath, filename), daemon=True).start()
@@ -419,6 +422,31 @@ def play_song(filename):
         if current_song == filename:
             current_song = None
             is_playing = False
+            current_track_path = None
+            lyrics_sync.clear("No track selected")
+
+
+def play_video_song(filename: str):
+    global current_song, is_playing, current_offset, current_track_path, song_length, album_art, is_loading_metadata, status_msg
+    filepath = os.path.join(VIDEOS_DIR, filename)
+    if not os.path.exists(filepath):
+        return
+    try:
+        pygame.mixer.music.load(filepath)
+        pygame.mixer.music.play()
+        current_song = filename
+        current_track_path = filepath
+        is_playing = True
+        current_offset = 0.0
+        song_length = 0
+        album_art = None
+        is_loading_metadata = True
+        lyrics_sync.load_for_audio(filepath)
+        threading.Thread(target=extract_metadata, args=(filepath,), daemon=True).start()
+        threading.Thread(target=_prepare_audio_vis, args=(filepath, filename), daemon=True).start()
+        _bump_play_count("videos", filename)
+    except Exception:
+        status_msg = f"Can't play: {filename}"
 
 
 def seek_to_seconds(target_seconds: float):
@@ -442,6 +470,13 @@ def seek_relative(delta_seconds: float):
     if song_length > 0:
         pos_now = current_offset + max(0, pygame.mixer.music.get_pos() / 1000.0)
     seek_to_seconds(pos_now + delta_seconds)
+
+
+def get_playback_seconds() -> float:
+    pos_s = current_offset + max(0.0, pygame.mixer.music.get_pos() / 1000.0)
+    if song_length > 0:
+        return max(0.0, min(float(song_length), pos_s))
+    return max(0.0, pos_s)
 
 def download_youtube(url):
     global yt_input_text, next_library_refresh, download_in_progress, download_status_msg
@@ -644,6 +679,7 @@ PROGRESS_BAR_RECT = pygame.Rect(80, 640, 480, 8)
 SEARCH_RECT = pygame.Rect(HALF_W + 280, 18, HALF_W - 300, 26)
 TOP_SUBMENU_LIBRARY_RECT = pygame.Rect(HALF_W + 20, 16, 74, 28)
 TOP_SUBMENU_DOWNLOAD_RECT = pygame.Rect(TOP_SUBMENU_LIBRARY_RECT.right + 8, 16, 96, 28)
+LYRICS_TOGGLE_RECT = pygame.Rect(TOP_SUBMENU_DOWNLOAD_RECT.right + 8, 16, 86, 28)
 DL_SOURCE_MUSIC_RECT = pygame.Rect(HALF_W + 36, 120, 210, 42)
 DL_SOURCE_VIDEOS_RECT = pygame.Rect(HALF_W + 264, 120, 210, 42)
 DL_INPUT_RECT = pygame.Rect(HALF_W + 36, 205, 438, 32)
@@ -653,7 +689,8 @@ DL_NEXT_BTN_RECT = pygame.Rect(HALF_W + 241, 258, 95, 34)
 DL_CONFIRM_BTN_RECT = pygame.Rect(HALF_W + 346, 258, 128, 34)
 
 # Rects used for tutorial targeting (so the arrow points to actual UI elements)
-LIBRARY_LIST_RECT = pygame.Rect(HALF_W + 20, 60, HALF_W - 40, HEIGHT - 200)
+LYRICS_PANEL_RECT = pygame.Rect(HALF_W + 20, 60, HALF_W - 40, 140)
+LIBRARY_LIST_RECT = pygame.Rect(HALF_W + 20, LYRICS_PANEL_RECT.bottom + 40, HALF_W - 40, HEIGHT - 340)
 
 tutorial_font = get_font(26)
 
@@ -826,7 +863,7 @@ def get_music_energy():
             sr = audio_vis_sr
             ready_for = audio_vis_ready_for
         if pcm is not None and ready_for == current_song and sr > 0:
-            t = current_offset + max(0.0, pygame.mixer.music.get_pos() / 1000.0)
+            t = get_playback_seconds()
             idx = int(t * sr)
             win = int(sr * 0.06)  # 60ms window
             a = max(0, idx - win)
@@ -839,7 +876,7 @@ def get_music_energy():
                 return audio_vis_energy_smooth
 
     # Fallback: deterministic pseudo-signal tied to playback time
-    t = (current_offset + max(0.0, pygame.mixer.music.get_pos() / 1000.0))
+    t = get_playback_seconds()
     e = abs(math.sin(t * 2.6)) * 60 + abs(math.sin(t * 7.4)) * 25
     audio_vis_energy_smooth = audio_vis_energy_smooth * 0.85 + (e * (0.5 + volume_ui)) * 0.15
     return audio_vis_energy_smooth
@@ -1211,11 +1248,7 @@ while running:
     curr_time_str = "0:00"
     total_time_str = "0:00"
     if current_song and song_length > 0:
-        pos_s = current_offset + max(0, pygame.mixer.music.get_pos() / 1000.0)
-        if pos_s < 0:
-            pos_s = 0
-        if pos_s > song_length:
-            pos_s = song_length
+        pos_s = get_playback_seconds()
         fill_w = int((pos_s / song_length) * PROGRESS_BAR_RECT.width)
         pygame.draw.rect(
             screen,
@@ -1257,10 +1290,70 @@ while running:
     screen.blit(lib_overlay, lib_area.topleft)
 
     if top_submenu == "library":
-        old_clip = screen.get_clip()
-        screen.set_clip(pygame.Rect(HALF_W + 20, 60, HALF_W - 40, HEIGHT - 260))
+        if mouse_click and LYRICS_TOGGLE_RECT.collidepoint(mouse_pos):
+            show_lyrics_panel = not show_lyrics_panel
+            lyrics_scroll_px = 0.0
 
-        y_offset = 60 - scroll_y
+        lyrics_btn_col = (255, 255, 255) if show_lyrics_panel else (228, 228, 228)
+        pygame.draw.rect(screen, lyrics_btn_col, LYRICS_TOGGLE_RECT, border_radius=8)
+        pygame.draw.rect(screen, (170, 170, 170), LYRICS_TOGGLE_RECT, 1, border_radius=8)
+        screen.blit(info_font.render("Lyrics", True, (40, 40, 40)), (LYRICS_TOGGLE_RECT.x + 11, LYRICS_TOGGLE_RECT.y + 3))
+
+        list_top = 60
+        if show_lyrics_panel:
+            pygame.draw.rect(screen, (245, 245, 245), LYRICS_PANEL_RECT, border_radius=10)
+            pygame.draw.rect(screen, (200, 200, 200), LYRICS_PANEL_RECT, 1, border_radius=10)
+            lyrics_lbl = title_font.render("Lyrics", True, (60, 60, 60))
+            screen.blit(lyrics_lbl, (LYRICS_PANEL_RECT.x + 10, LYRICS_PANEL_RECT.y + 8))
+
+            lyric_view_rect = pygame.Rect(
+                LYRICS_PANEL_RECT.x + 12,
+                LYRICS_PANEL_RECT.y + 38,
+                LYRICS_PANEL_RECT.width - 24,
+                LYRICS_PANEL_RECT.height - 48,
+            )
+            old_lyric_clip = screen.get_clip()
+            screen.set_clip(lyric_view_rect)
+
+            if lyrics_sync.lines:
+                pos_s = get_playback_seconds()
+                active_lyric_idx = lyrics_sync.get_active_index(pos_s)
+                line_h = 22
+                content_h = len(lyrics_sync.lines) * line_h
+                max_scroll = max(0.0, float(content_h - lyric_view_rect.height))
+                if active_lyric_idx >= 0:
+                    target = active_lyric_idx * line_h - ((lyric_view_rect.height - line_h) / 2.0)
+                    target = max(0.0, min(max_scroll, target))
+                    lyrics_scroll_px += (target - lyrics_scroll_px) * 0.22
+                else:
+                    lyrics_scroll_px *= 0.9
+                lyrics_scroll_px = max(0.0, min(max_scroll, lyrics_scroll_px))
+
+                y = lyric_view_rect.y - int(lyrics_scroll_px)
+                for i, line in enumerate(lyrics_sync.lines):
+                    color = (40, 40, 40)
+                    font = info_font
+                    if i == active_lyric_idx:
+                        color = (210, 40, 120)
+                        font = title_font
+                    surf = font.render(line.text, True, color)
+                    screen.blit(surf, (lyric_view_rect.x + 4, y))
+                    y += line_h
+            else:
+                lyrics_scroll_px *= 0.9
+                msg = info_font.render(lyrics_sync.status_message, True, (120, 120, 120))
+                screen.blit(msg, (lyric_view_rect.x + 4, lyric_view_rect.y + (lyric_view_rect.height - msg.get_height()) // 2))
+
+            screen.set_clip(old_lyric_clip)
+            list_top = LYRICS_PANEL_RECT.bottom + 40
+        else:
+            lyrics_scroll_px *= 0.9
+
+        list_rect = pygame.Rect(HALF_W + 20, list_top, HALF_W - 40, HEIGHT - 260 - (list_top - 60))
+        old_clip = screen.get_clip()
+        screen.set_clip(list_rect)
+
+        y_offset = list_top - scroll_y
 
         def draw_section(items, section_name: str, enabled: bool, x0: int, y: int) -> int:
             global current_song, is_playing
@@ -1311,17 +1404,7 @@ while running:
                         if mouse_click:
                             # Switch library root based on section
                             if section_name == "videos":
-                                # play from videos folder
-                                fp = os.path.join(VIDEOS_DIR, song)
-                                if os.path.exists(fp):
-                                    try:
-                                        pygame.mixer.music.load(fp)
-                                        pygame.mixer.music.play()
-                                        current_song = song
-                                        is_playing = True
-                                        _bump_play_count("videos", song)
-                                    except Exception:
-                                        pass
+                                play_video_song(song)
                             else:
                                 play_song(song)
 
@@ -1362,7 +1445,6 @@ while running:
         s_color = (255, 255, 255) if search_active else (230, 230, 230)
         pygame.draw.rect(screen, s_color, SEARCH_RECT)
         pygame.draw.rect(screen, (180, 180, 180), SEARCH_RECT, 1)
-
         s_surf = info_font.render(search_text or "alb nebo song", True, (120, 120, 120) if not search_text else (0, 0, 0))
         s_x = SEARCH_RECT.x + 5
         if s_surf.get_width() > SEARCH_RECT.width - 10:
