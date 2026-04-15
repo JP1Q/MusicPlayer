@@ -148,7 +148,7 @@ class TimedLyrics:
 
         for params in candidates:
             try:
-                resp = requests.get(_LRCLIB_SEARCH_URL, params=params, timeout=4)
+                resp = requests.get(_LRCLIB_SEARCH_URL, params=params, timeout=3)
                 if resp.status_code != 200:
                     continue
                 synced = self._pick_synced_lyrics(resp.json())
