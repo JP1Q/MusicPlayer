@@ -113,7 +113,7 @@ If you manage to get a clean APK build on real devices, please open a PR with no
 - Space: play/pause
 - Left/Right arrows: seek -5s/+5s
 - Click the progress bar to jump
-- Drag the volume knob to change volume
+- Click or drag the volume knob to change volume
 - In the right half header, click top submenu **Download**, then go through **source -> options -> confirm**.
 - Download UI shows explicit states (idle/queued/downloading/success/error), progress, and error next steps.
 
