@@ -12,7 +12,9 @@ It's a hobby project. It works, but it's not polished - that's kind of the point
 
 - Play local audio from `./library/`
 - Download/extract audio from YouTube using `yt-dlp`
-- Search/filter the library
+- Search/filter the library (album/artist/song)
+- Group library by album or artist
+- Group ordering: alphabet / age / random
 - Seek by clicking the progress bar
 - Volume knob
 - Reads metadata + tries to fetch album art
