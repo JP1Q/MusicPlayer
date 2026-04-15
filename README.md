@@ -108,7 +108,7 @@ If you manage to get a clean APK build on real devices, please open a PR with no
 - Left/Right arrows: seek -5s/+5s
 - Click the progress bar to jump
 - Drag the volume knob to change volume
-- Open **Download** in the top submenu (right panel), then go through **source -> options -> confirm**.
+- In the right half header, click top submenu **Download**, then go through **source -> options -> confirm**.
 
 ## Screenshots
 
@@ -159,4 +159,3 @@ python -m pip install --upgrade pip
 ## License
 
 No license file yet.
-
