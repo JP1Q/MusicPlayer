@@ -79,5 +79,5 @@ class TimedLyrics:
     def get_active_index(self, playback_seconds: float) -> int:
         if not self._times:
             return -1
-        idx = bisect_right(self._times, max(0.0, float(playback_seconds))) - 1
+        idx = bisect_right(self._times, max(0.0, playback_seconds)) - 1
         return idx if idx >= 0 else -1

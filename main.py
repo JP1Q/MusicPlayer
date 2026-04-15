@@ -411,7 +411,7 @@ def play_song(filename):
             lyrics_sync.load_for_audio(filepath)
             threading.Thread(target=extract_metadata, args=(filepath,), daemon=True).start()
             # připrav PCM pro vizuál na pozadí (když to půjde) x3
-            threading.Thread(target=_prepare_audio_vis, args=(filepath, filepath), daemon=True).start()
+            threading.Thread(target=_prepare_audio_vis, args=(filepath, filename), daemon=True).start()
         except Exception as e:
             status_msg = f"Can't play: {filename}"
     else:
@@ -440,7 +440,7 @@ def play_video_song(filename: str):
         is_loading_metadata = True
         lyrics_sync.load_for_audio(filepath)
         threading.Thread(target=extract_metadata, args=(filepath,), daemon=True).start()
-        threading.Thread(target=_prepare_audio_vis, args=(filepath, filepath), daemon=True).start()
+        threading.Thread(target=_prepare_audio_vis, args=(filepath, filename), daemon=True).start()
         _bump_play_count("videos", filename)
     except Exception:
         status_msg = f"Can't play: {filename}"
@@ -828,7 +828,7 @@ def get_music_energy():
             pcm = audio_vis_pcm
             sr = audio_vis_sr
             ready_for = audio_vis_ready_for
-        if pcm is not None and ready_for == current_track_path and sr > 0:
+        if pcm is not None and ready_for == current_song and sr > 0:
             t = get_playback_seconds()
             idx = int(t * sr)
             win = int(sr * 0.06)  # 60ms window
@@ -1263,7 +1263,7 @@ while running:
             if i == active_lyric_idx:
                 color = (210, 40, 120)
                 font = title_font
-            txt = line.text if line.text else "..."
+            txt = line.text
             surf = font.render(txt, True, color)
             screen.blit(surf, (lyric_view_rect.x + 4, y))
             y += line_h
