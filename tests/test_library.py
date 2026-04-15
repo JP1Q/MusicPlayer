@@ -118,6 +118,17 @@ class LibraryTests(unittest.TestCase):
             with patch.object(library_module, "File", side_effect=RuntimeError("read error")):
                 self.assertEqual(lib._album_name("any.mp3"), "Unknown Album")
 
+    def test_album_name_uses_playlist_metadata_when_album_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(library_module, "File", return_value=None):
+                lib = Library(tmp)
+
+            with patch.object(library_module, "File", return_value=_Audio({"TXXX:PLAYLIST": _MockAlbumTag("Rory in Early 20s")})):
+                self.assertEqual(lib._album_name("any.mp3"), "Rory in Early 20s")
+
+            with patch.object(library_module, "File", return_value=_Audio({"TXXX:playlist": _MockAlbumTag("Live Set")})):
+                self.assertEqual(lib._album_name("any.mp3"), "Live Set")
+
 
 if __name__ == "__main__":
     unittest.main()
