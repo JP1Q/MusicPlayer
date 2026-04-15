@@ -15,10 +15,10 @@ class VolumeKnobController:
     is_dragging: bool = False
 
     def _clamp_value(self, value: float) -> float:
-        return float(max(0.0, min(1.0, value)))
+        return max(0.0, min(1.0, value))
 
     def _clamp_angle(self, angle: float) -> float:
-        return float(max(self.min_angle, min(self.max_angle, angle)))
+        return max(self.min_angle, min(self.max_angle, angle))
 
     def _angle_from_position(self, mouse_pos: tuple[int, int]) -> float:
         mx, my = mouse_pos

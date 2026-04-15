@@ -1298,8 +1298,8 @@ while running:
 
     if vol_knob_img:
         # lineární mapování volume -> úhel knoflíku x3
-        angle_deg = volume_knob.sprite_rotation_degrees()
-        rotated_knob = pygame.transform.rotate(vol_knob_img, angle_deg)
+        rotation_angle = volume_knob.sprite_rotation_degrees()
+        rotated_knob = pygame.transform.rotate(vol_knob_img, rotation_angle)
         knob_rect = rotated_knob.get_rect(center=vol_knob_center)
         screen.blit(rotated_knob, knob_rect.topleft)
     else:
