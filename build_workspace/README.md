@@ -18,9 +18,9 @@ Výstup bude v `..\dist\` (PyInstaller default).
 Buildozer se typicky pouští ve WSL/Linuxu. Doporučení:
 
 ```bash
-cd /mnt/d/PythonShit/UkasCoUmis
-buildozer android debug
+cd /home/runner/work/MusicPlayer/MusicPlayer
+./tools/build_android.sh
 ```
 
 `buildozer.spec` je v rootu.
-
+APK output je v `out/android/`.

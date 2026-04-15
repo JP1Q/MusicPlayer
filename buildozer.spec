@@ -14,6 +14,7 @@ source.dir = .
 
 # (list) Source files to include (leave empty to include all by default)
 include_exts = py,png,jpg,jpeg,ttf,txt
+source.exclude_dirs = build,dist,.git,.idea,.venv,__pycache__,build_workspace
 
 # (str) Application versioning (method 1)
 version = 0.1.0
@@ -51,6 +52,9 @@ android.ndk = 25b
 # (str) Android SDK version
 android.sdk = 33
 
+# (bool) Automatically accept Android SDK licenses during setup
+android.accept_sdk_license = True
+
 # (str) Bootstrap to use
 p4a.bootstrap = sdl2
 
@@ -67,3 +71,6 @@ log_level = 2
 # (str) Warn on deprecated distutils
 warn_on_root = 1
 
+# Keep build outputs in a stable project path
+build_dir = .buildozer
+bin_dir = build_workspace/out/android
