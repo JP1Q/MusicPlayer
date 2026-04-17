@@ -71,7 +71,48 @@ if not os.path.exists(VIDEOS_DIR):
     os.makedirs(VIDEOS_DIR)
 
 pygame.init()
-pygame.mixer.init()
+
+
+def _init_mixer_with_fallbacks() -> tuple[bool, str | None]:
+    """Init mixer with best-effort fallbacks on Windows device issues."""
+    drivers: list[str | None] = [None]
+    if os.name == "nt":
+        drivers.extend(["directsound", "winmm", "dummy"])
+    else:
+        drivers.append("dummy")
+
+    original_driver = os.environ.get("SDL_AUDIODRIVER")
+
+    for drv in drivers:
+        try:
+            pygame.mixer.quit()
+        except Exception:
+            pass
+
+        try:
+            if drv:
+                os.environ["SDL_AUDIODRIVER"] = drv
+            elif original_driver is None:
+                os.environ.pop("SDL_AUDIODRIVER", None)
+            else:
+                os.environ["SDL_AUDIODRIVER"] = original_driver
+
+            pygame.mixer.init()
+            active = pygame.mixer.get_init()
+            if active is not None:
+                return True, (drv or "default")
+        except Exception:
+            continue
+
+    # Restore env when all attempts fail.
+    if original_driver is None:
+        os.environ.pop("SDL_AUDIODRIVER", None)
+    else:
+        os.environ["SDL_AUDIODRIVER"] = original_driver
+    return False, None
+
+
+AUDIO_READY, AUDIO_DRIVER = _init_mixer_with_fallbacks()
 
 # text pro UI okolo yt-dlp (status/percent) x3
 yt_input_text = ""
@@ -203,7 +244,8 @@ def _volume_ui_to_gain(x: float) -> float:
 
 
 volume_ui = 0.5
-pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
+if AUDIO_READY:
+    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
 is_dragging_vol = False
 vol_knob_center = (500, 582)
 vol_knob_radius = 20
@@ -746,10 +788,19 @@ ART_RECT = pygame.Rect((HALF_W - 480) // 2, 50, 480, 480)
 PLAY_BTN = pygame.Rect(HALF_W // 2 - 30 - 40, 560, 40, 45)
 PAUSE_BTN = pygame.Rect(HALF_W // 2 + 30, 560, 40, 45)
 PROGRESS_BAR_RECT = pygame.Rect(80, 640, 480, 8)
-SEARCH_RECT = pygame.Rect(HALF_W + 280, 18, HALF_W - 300, 26)
+RIGHT_PANEL_RECT = pygame.Rect(HALF_W + 10, 45, HALF_W - 20, HEIGHT - 250)
 TOP_SUBMENU_LIBRARY_RECT = pygame.Rect(HALF_W + 20, 16, 74, 28)
 TOP_SUBMENU_DOWNLOAD_RECT = pygame.Rect(TOP_SUBMENU_LIBRARY_RECT.right + 8, 16, 96, 28)
 LYRICS_TOGGLE_RECT = pygame.Rect(TOP_SUBMENU_DOWNLOAD_RECT.right + 8, 16, 86, 28)
+# search box starts after top controls, so they never overlap
+SEARCH_RECT_LEFT_PAD = 14
+SEARCH_RECT_RIGHT_PAD = 20
+SEARCH_RECT = pygame.Rect(
+    LYRICS_TOGGLE_RECT.right + SEARCH_RECT_LEFT_PAD,
+    18,
+    max(120, WIDTH - (LYRICS_TOGGLE_RECT.right + SEARCH_RECT_LEFT_PAD) - SEARCH_RECT_RIGHT_PAD),
+    26,
+)
 DL_SOURCE_MUSIC_RECT = pygame.Rect(HALF_W + 36, 120, 210, 42)
 DL_SOURCE_VIDEOS_RECT = pygame.Rect(HALF_W + 264, 120, 210, 42)
 DL_INPUT_RECT = pygame.Rect(HALF_W + 36, 205, 438, 32)
@@ -760,7 +811,7 @@ DL_CONFIRM_BTN_RECT = pygame.Rect(HALF_W + 346, 258, 128, 34)
 
 # Rects used for tutorial targeting (so the arrow points to actual UI elements)
 LYRICS_PANEL_RECT = pygame.Rect(HALF_W + 20, 60, HALF_W - 40, 140)
-LIBRARY_LIST_RECT = pygame.Rect(HALF_W + 20, LYRICS_PANEL_RECT.bottom + 40, HALF_W - 40, HEIGHT - 340)
+LIBRARY_LIST_RECT = pygame.Rect(RIGHT_PANEL_RECT.x + 10, 60, RIGHT_PANEL_RECT.width - 20, RIGHT_PANEL_RECT.height - 20)
 
 tutorial_font = get_font(26)
 
@@ -1080,7 +1131,8 @@ while running:
                 ang = max(VOL_ANGLE_MIN, min(VOL_ANGLE_MAX, ang))
                 volume_ui = (ang - VOL_ANGLE_MIN) / (VOL_ANGLE_MAX - VOL_ANGLE_MIN)
                 volume_ui = max(0.0, min(1.0, float(volume_ui)))
-                pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
+                if AUDIO_READY:
+                    pygame.mixer.music.set_volume(_volume_ui_to_gain(volume_ui))
 
     pygame.draw.rect(screen, (210, 210, 210), (0, 0, HALF_W, HEIGHT))
     pygame.draw.rect(screen, (235, 235, 235), (HALF_W, 0, HALF_W, HEIGHT))
@@ -1371,7 +1423,7 @@ while running:
     state_color = state_colors.get(download_state, (90, 90, 90))
 
     # Library/download panel
-    lib_area = pygame.Rect(HALF_W + 10, 45, HALF_W - 20, HEIGHT - 250)
+    lib_area = RIGHT_PANEL_RECT
     lib_overlay = pygame.Surface((lib_area.width, lib_area.height), pygame.SRCALPHA)
     lib_overlay.fill((255, 255, 255, 35))
     screen.blit(lib_overlay, lib_area.topleft)
@@ -1436,7 +1488,9 @@ while running:
         else:
             lyrics_scroll_px *= 0.9
 
-        list_rect = pygame.Rect(HALF_W + 20, list_top, HALF_W - 40, HEIGHT - 260 - (list_top - 60))
+        list_bottom = lib_area.bottom - 8
+        list_h = max(60, list_bottom - list_top)
+        list_rect = pygame.Rect(lib_area.x + 10, list_top, lib_area.width - 20, list_h)
         old_clip = screen.get_clip()
         screen.set_clip(list_rect)
 
@@ -1525,9 +1579,6 @@ while running:
             search_active = SEARCH_RECT.collidepoint(mouse_pos)
         dl_input_active = False
 
-        search_caption = info_font.render("hledat:", True, (50, 50, 50))
-        search_caption_x = SEARCH_RECT.x - search_caption.get_width() - 8
-        screen.blit(search_caption, (search_caption_x, 20))
 
         s_color = (255, 255, 255) if search_active else (230, 230, 230)
         pygame.draw.rect(screen, s_color, SEARCH_RECT)
