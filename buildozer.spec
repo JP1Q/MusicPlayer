@@ -15,6 +15,9 @@ source.dir = .
 # (list) Source files to include (leave empty to include all by default)
 include_exts = py,png,jpg,jpeg,ttf,txt
 
+# (str) Splash shown while app is loading from Android launcher
+presplash.filename = bg.png
+
 # (str) Application versioning (method 1)
 version = 0.1.0
 
@@ -66,4 +69,3 @@ log_level = 2
 
 # (str) Warn on deprecated distutils
 warn_on_root = 1
-
