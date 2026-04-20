@@ -94,18 +94,59 @@ The in-app YouTube download/extract feature uses `yt-dlp` and (usually) **ffmpeg
 
 If users report that downloads fail, include `ffmpeg.exe` and `ffprobe.exe` next to the exe in your release archive.
 
-### Android APK (help wanted)
+### Android APK (reproducible debug build)
 
-Android builds are meant to be done with **Buildozer** (usually via WSL/Linux). If you like pain and want to help: this is a great area to contribute.
+Use Linux/WSL for Android builds.
 
-High-level:
+#### Windows wizard (recommended on Windows host)
 
-```bash
-cd /mnt/d/PythonShit/UkasCoUmis
-buildozer android debug
+From PowerShell in repo root:
+
+```powershell
+.\tools\build_android_wizard.bat
 ```
 
-If you manage to get a clean APK build on real devices, please open a PR with notes (and what device/Android version you tested).
+Or directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build_android_wizard.ps1
+```
+
+The wizard:
+- checks WSL availability
+- picks Ubuntu (or first available distro)
+- installs required Linux deps
+- creates/uses `.venv`
+- runs the debug APK build
+
+#### Toolchain (known-good versions)
+
+- OS: Ubuntu 22.04+ / WSL2 Ubuntu
+- Python: 3.11.x
+- Buildozer: 1.5.0
+- Cython: 0.29.37
+- Java: OpenJDK 17
+- Android API/SDK: 33
+- Android NDK: 25b
+
+#### Fresh environment setup
+
+```bash
+sudo apt update
+sudo apt install -y git zip unzip openjdk-17-jdk python3 python3-venv python3-pip
+
+cd /path/to/MusicPlayer
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install buildozer==1.5.0 cython==0.29.37
+
+./tools/build_android.sh
+```
+
+Build output (debug APK artifact):
+
+- `build_workspace/out/android/*-debug*.apk`
 
 ## Usage
 
@@ -165,6 +206,38 @@ On Windows it usually works via wheels. If not, try upgrading pip:
 
 ```powershell
 python -m pip install --upgrade pip
+```
+
+### Buildozer: `Could not find acceptable C compiler`
+
+Install missing build tools:
+
+```bash
+sudo apt install -y build-essential
+```
+
+### Buildozer: `sdkmanager`/license errors
+
+Make sure Java 17 is active and rebuild:
+
+```bash
+java -version
+./tools/build_android.sh
+```
+
+(`buildozer.spec` sets `android.accept_sdk_license = True`.)
+
+### APK file not found after successful logs
+
+The project writes APKs to:
+
+- `build_workspace/out/android/`
+
+If missing, clean and rebuild:
+
+```bash
+rm -rf .buildozer build_workspace/out/android
+./tools/build_android.sh
 ```
 
 ## License
