@@ -61,14 +61,28 @@ def _app_storage_dir() -> str | None:
         return None
 
 
-_ANDROID_ROOT = _app_storage_dir()
-LIBRARY_DIR = os.path.join(_ANDROID_ROOT, "library") if _ANDROID_ROOT else "library"
-VIDEOS_DIR = os.path.join(_ANDROID_ROOT, "videos") if _ANDROID_ROOT else "videos"
+def _windows_storage_dir() -> str | None:
+    """Return writable app storage root on frozen Windows builds.
+
+    Falls back to %USERPROFILE%\\AppData\\Local\\UkasCoUmis when APPDATA vars
+    are not present.
+    """
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return None
+    base = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), "AppData", "Local")
+    return os.path.join(base, "UkasCoUmis")
+
+
+_APP_DATA_ROOT = _app_storage_dir() or _windows_storage_dir()
+LIBRARY_DIR = os.path.join(_APP_DATA_ROOT, "library") if _APP_DATA_ROOT else "library"
+VIDEOS_DIR = os.path.join(_APP_DATA_ROOT, "videos") if _APP_DATA_ROOT else "videos"
 
 if not os.path.exists(LIBRARY_DIR):
-    os.makedirs(LIBRARY_DIR)
+    os.makedirs(LIBRARY_DIR, exist_ok=True)
 if not os.path.exists(VIDEOS_DIR):
-    os.makedirs(VIDEOS_DIR)
+    os.makedirs(VIDEOS_DIR, exist_ok=True)
 
 pygame.init()
 
